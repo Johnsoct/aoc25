@@ -20,6 +20,7 @@ export const getNewValue = (currentValue: number, change: number) => {
 export const getPartialLoopAcrossZero = (currentValue: number, change: number) => {
     const newValue = currentValue + change;
 
+    // Starting at 0 does not count as "across zero"
     // 99 + 1 (to avoid duplicate counting at 0
     if (currentValue !== 0 && (newValue < 0 || newValue > 100)) {
         return true;
