@@ -4,7 +4,6 @@ const idRangesToCheck = puzzleData
     .idRanges
     .split(",");
 const invalidIds: number[] = [];
-const validIds: number[] = [];
 
 idRangesToCheck.forEach((idRange) => {
     // Convert to numbers; reduces need to check for leading 0s;
@@ -40,9 +39,6 @@ idRangesToCheck.forEach((idRange) => {
 
             if (potentialMatchesAllMatch) {
                 invalidIds.push(id);
-            }
-            else {
-                validIds.push(id);
             }
         });
     }
