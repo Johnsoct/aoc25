@@ -19,10 +19,7 @@ batteryBanks.forEach((joltages) => {
 });
 
 const maxOutput = batteryBanksMaxOutputs.reduce((acc: number, cur: number) => {
-    // eslint-disable-next-line no-param-reassign
-    acc += cur;
-
-    return acc;
+    return acc + cur; 
 }, 0);
 
 console.log(maxOutput);
