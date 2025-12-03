@@ -3,8 +3,7 @@ import puzzleData from "./3.json" with { type: "json" };
 const batteryBanks = puzzleData.batteryBanks;
 const batteryBanksMaxOutputs: number[] = [];
 
-batteryBanks.forEach((batteryBank) => {
-    const joltages = batteryBank.split("");
+batteryBanks.forEach((joltages) => {
     let highCombination: number = 0;
 
     // Two pointers - brute forcing
