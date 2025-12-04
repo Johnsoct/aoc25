@@ -42,7 +42,7 @@ diagram.forEach((row, rowIndex) => {
                     }
                 }
 
-                if (adjacentRolls <= adjacentRollsLimit) {
+                if (adjacentRolls < adjacentRollsLimit) {
                     count++;
                 }
             }
