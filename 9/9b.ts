@@ -165,6 +165,7 @@ const castRay = (coordinate: number[], edges: EdgesMap) => {
  * 2. (b) in the middle
  */
 export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[], boundaryX: number) => {
+    // TODO: should be a separate function
     const edgesInThePathOfTheRay = Array.from(edges).filter(([ _, yBoundaries ]) => {
         return Array.from(yBoundaries).filter((stringCoordinate) => {
             const yCoordinate = coordinate[1];
@@ -185,7 +186,7 @@ export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[],
     const rayStartPosition = coordinate;
     let edgesCrossed = 0;
 
-    // For each edge
+    // TODO: should be a separate function
     edgesInThePathOfTheRay.forEach(([ x, yBoundaries ]) => {
         // 1. Does the coordinate's X exist on the left or right of the edge's X?
         if (coordinate[0] > Number(x)) {
@@ -201,6 +202,17 @@ export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[],
             }
         }
     });
+
+    console.log(edgesCrossed);
+
+    // TODO: should be a separate function
+    // If even, the coordinate is not within the polygon
+    if (edgesCrossed % 2) {
+        return true;
+    }
+    else {
+        return false;
+    }
 };
 
 const vertices = findVertices(redTileCoordinates);
