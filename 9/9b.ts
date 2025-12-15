@@ -189,16 +189,14 @@ export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[],
     edgesInThePathOfTheRay.forEach(([ x, yBoundaries ]) => {
         // 1. Does the coordinate's X exist on the left or right of the edge's X?
         if (coordinate[0] > Number(x)) {
-            continue;
+            return;
         }
         else {
             // 2. Does the coordinate's Y exist within the Y bounds of the edge?
-            const yBoundBottom = Array.from(yBoundaries)[1];
-            const yBoundTop = Array.from(yBoundaries)[0];
+            const yBoundBottom = Number(Array.from(yBoundaries)[1]);
+            const yBoundTop = Number(Array.from(yBoundaries)[0]);
 
-            if (
-                yBoundaries
-            ) {
+            if (yBoundBottom <= coordinate[1] && coordinate[1] <= yBoundTop) {
                 edgesCrossed++;
             }
         }

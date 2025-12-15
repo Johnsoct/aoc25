@@ -118,8 +118,9 @@ describe("isCoordinateWithinPolygon", () => {
         },
     ];
 
-    falses.forEach(() => {
-        test("", () => {
+    falses.forEach(({ boundaryX, coordinate, edges }) => {
+        test(`${coordinate}`, () => {
+            expect(isCoordinateWithinPolygon(edges, coordinate, boundaryX)).toEqual(false);
         });
     });
 
@@ -154,7 +155,7 @@ describe("isCoordinateWithinPolygon", () => {
     ];
 
     trues.forEach(({ boundaryX, coordinate, edges }) => {
-        test(`${coordinate}`, () => {
+        test.only(`${coordinate}`, () => {
             expect(isCoordinateWithinPolygon(edges, coordinate, boundaryX)).toEqual(true);
         });
     });
