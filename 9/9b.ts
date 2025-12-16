@@ -146,6 +146,7 @@ const findVertices = (coordinates: number[][]): Vertices => {
     return vertices;
 };
 
+// BUG: not even close to working correctly
 export const getEdgesInPathOfRay = (edges: EdgesMap, coordinate: number[]): EdgesMap => {
     const edgesInPath: EdgesMap = new Map();
 
