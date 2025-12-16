@@ -1,4 +1,3 @@
-/* eslint-disable perfectionist/sort-sets */
 /* eslint-disable perfectionist/sort-maps */
 import {
     describe,
@@ -7,15 +6,73 @@ import {
 } from "vitest";
 
 import {
+    castRay,
     findEdges,
+    getEdgesInPathOfRay,
     isCoordinateWithinPolygon,
 } from "./9b";
 
 import type {
     EdgesMap,
-    Vertices,
 } from "./9b.ts";
 
+interface Test {
+    coordinate: number[];
+    edges: EdgesMap;
+    expectation?: any;
+};
+
+
+describe("castRay", () => {
+    const evenTests: Test[] = [];
+
+    const oddTests: Test[] = [
+        {
+            coordinate: [ -3, 0 ],
+            edges: new Map([
+                // Crosses once at [-1,0]
+                [ "-1", [ [ 1,-1 ] ] ],
+            ]),
+            expectation: 1,
+        },
+        {
+            coordinate: [ 3, 0 ],
+            edges: new Map([
+                [ "-1", [ [ 1,-1 ] ] ],
+                // Crosses once at [4,0]
+                [ "4", [ [ 7,-14 ] ] ],
+            ]),
+            expectation: 1,
+        },
+        {
+            coordinate: [ 0, 0 ],
+            edges: new Map([
+                // Crosses once at [1,0]
+                [ "1", [ [ 1,-1 ], [ 20,14 ] ] ],
+                // Crosses once at [3,0]
+                [ "3", [ [ 1,-1 ] ] ],
+                // Crosses once at [333,0]
+                [ "333", [ [ 1000,-1000 ] ] ],
+            ]),
+            expectation: 3,
+        },
+        {
+            coordinate: [ 0, 0 ],
+            edges: new Map([
+                [ "-1", [ [ 1,-1 ] ] ],
+                // Crosses at [1,0]
+                [ "1", [ [ 1,-1 ] ] ],
+            ]),
+            expectation: 1,
+        },
+    ];
+
+    oddTests.forEach(({ coordinate, edges, expectation }) => {
+        test(`castRay crosses ${expectation} edges from ${coordinate}`, () => {
+            expect(castRay(getEdgesInPathOfRay(edges, coordinate), coordinate)).toEqual(expectation);
+        });
+    });
+});
 
 describe("findEdges", () => {
     /*
@@ -23,7 +80,7 @@ describe("findEdges", () => {
      * ---------|---------
      * (-1,-1). | . (1,-1)
      */
-    const verticesOfASquare = new Set([
+    const verticesOfASquare = [
         // top left 
         [ -1, 1 ],
         // top right
@@ -32,13 +89,13 @@ describe("findEdges", () => {
         [ 1, -1 ],
         // bottom left
         [ -1, -1 ],
-    ]);
+    ];
 
     test("Continuous vertices along the same X coordinate are recorded as a single edge", () => {
         const edges = findEdges(verticesOfASquare);
         const expectedMap = new Map([
-            [ "-1", new Set([ "[1,-1]" ]) ],
-            [ "1", new Set([ "[1,-1]" ]) ],
+            [ "-1", [ [ 1,-1 ] ] ],
+            [ "1", [ [ 1,-1 ] ] ],
         ]);
 
         Array.from(expectedMap.keys()).forEach((key) => {
@@ -48,12 +105,15 @@ describe("findEdges", () => {
     });
 
     test("If the first and last X coordinate are along the same edge, they're record as part of the same edge", () => {
-        const edges = findEdges(new Set([
+        const edges = findEdges([
             [ -1, 1 ],
+            [ 2, 2 ],
+            [ 2, -2 ],
             [ -1, -1 ],
-        ]));
+        ]);
         const expectedMap = new Map([
-            [ "-1", new Set([ "[1,-1]" ]) ],
+            [ "-1", [ [ 1,-1 ] ] ],
+            [ "2", [ [ 2, -2 ] ] ],
         ]);
 
         Array.from(expectedMap.keys()).forEach((key) => {
@@ -78,7 +138,7 @@ describe("findEdges", () => {
          *            |       |
          *            ---------
          */
-        const edges = findEdges(new Set([
+        const edges = findEdges([
             [ -2, 1 ],
             [ 2, 1 ],
             [ 2, 2 ],
@@ -87,11 +147,11 @@ describe("findEdges", () => {
             [ 2, -2 ],
             [ 2, -1 ],
             [ -2, -1 ],
-        ]));
+        ]);
         const expectedMap = new Map([
-            [ "-2", new Set([ "[1,-1]" ]) ],
-            [ "2", new Set([ "[2,1]", "[-1,-2]" ]) ],
-            [ "10", new Set([ "[2,-2]" ]) ],
+            [ "-2", [ [ 1,-1 ] ] ],
+            [ "2", [ [ 2,1 ], [ -1,-2 ] ] ],
+            [ "10", [ [ 2,-2 ] ] ],
         ]);
 
         Array.from(expectedMap.keys()).forEach((key) => {
@@ -102,61 +162,68 @@ describe("findEdges", () => {
 });
 
 describe("isCoordinateWithinPolygon", () => {
-    interface Test {
-        boundaryX: number;
-        coordinate: number[];
-        edges: EdgesMap;
-    };
-
     const falses: Test[] = [
         {
-            boundaryX: 10,
             coordinate: [ 0, 0 ],
             edges: new Map([
-                [ "-1", new Set([ "[1,-1]" ]) ],
+                [ "-1", [ [ 1,-1 ] ] ],
+            ]),
+        },
+        {
+            coordinate: [ 5, 5 ],
+            edges: new Map([
+                [ "-1", [ [ 1,-1 ] ] ],
+                [ "1", [ [ 1,-1 ] ] ],
             ]),
         },
     ];
 
-    falses.forEach(({ boundaryX, coordinate, edges }) => {
+    falses.forEach(({ coordinate, edges }) => {
         test(`${coordinate}`, () => {
-            expect(isCoordinateWithinPolygon(edges, coordinate, boundaryX)).toEqual(false);
+            expect(isCoordinateWithinPolygon(edges, coordinate)).toEqual(false);
         });
     });
 
     const trues: Test[] = [
         {
-            boundaryX: 10,
             coordinate: [ -3, 0 ],
             edges: new Map([
-                [ "-1", new Set([ "[1,-1]" ]) ],
+                // Crosses once at [-1,0]
+                [ "-1", [ [ 1,-1 ] ] ],
             ]),
         },
         {
-            boundaryX: 10,
             coordinate: [ 3, 0 ],
             edges: new Map([
-                [ "-1", new Set([ "[1,-1]" ]) ],
-                [ "4", new Set([ "[7,-14]" ]) ],
+                [ "-1", [ [ 1,-1 ] ] ],
+                // Crosses once at [4,0]
+                [ "4", [ [ 7,-14 ] ] ],
             ]),
         },
         {
-            boundaryX: 1000,
             coordinate: [ 0, 0 ],
             edges: new Map([
                 // Crosses once at [1,0]
-                [ "1", new Set([ "[1,-1]", "[20,14]" ]) ],
+                [ "1", [ [ 1,-1 ], [ 20,14 ] ] ],
                 // Crosses once at [3,0]
-                [ "3", new Set([ "[1,-1]" ]) ],
+                [ "3", [ [ 1,-1 ] ] ],
                 // Crosses once at [333,0]
-                [ "333", new Set([ "[1000,-1000]" ]) ],
+                [ "333", [ [ 1000,-1000 ] ] ],
+            ]),
+        },
+        {
+            coordinate: [ 0, 0 ],
+            edges: new Map([
+                [ "-1", [ [ 1,-1 ] ] ],
+                // Crosses at [1,0]
+                [ "1", [ [ 1,-1 ] ] ],
             ]),
         },
     ];
 
-    trues.forEach(({ boundaryX, coordinate, edges }) => {
-        test.only(`${coordinate}`, () => {
-            expect(isCoordinateWithinPolygon(edges, coordinate, boundaryX)).toEqual(true);
+    trues.forEach(({ coordinate, edges }) => {
+        test(`${coordinate}`, () => {
+            expect(isCoordinateWithinPolygon(edges, coordinate)).toEqual(true);
         });
     });
 });

@@ -1,7 +1,7 @@
 import puzzleData from "./9.json" with { type: "json" };
 
-export type EdgesMap = Map<string, Set<string>>;
-export type Vertices = Set<number[]>;
+export type EdgesMap = Map<string, number[][]>;
+export type Vertices = number[][];
 
 /*
  * Ray casting (even-odd rule):
@@ -28,7 +28,7 @@ export type Vertices = Set<number[]>;
 
 // Coordinates are the vertices of a larger polygon
 const redTileCoordinates = puzzleData.redTileCoordinates;
-const maxArea = 0;
+let maxArea = 0;
 
 const calculateArea = (corner: number[], oppositeCorner: number[]) => {
     // + 1 for inclusiveness (i.e. 7 - 2 = 5, but "width" here means the points on a graph
@@ -37,105 +37,6 @@ const calculateArea = (corner: number[], oppositeCorner: number[]) => {
     const width = Math.abs(corner[0] - oppositeCorner[0]) + 1;
 
     return height * width;
-};
-
-/*
- * getMapSafeCoordinateValue
- *
- * Returns a Map safe key value (stringified version of an array of numbers)
- */
-const getMapSafeCoordinateValue = (coordinate: number): string => {
-    const mapKeySafeValue = `${coordinate}`;
-
-    return mapKeySafeValue;
-};
-
-/*
- * findEdges
- *
- * Finds the vertical edges among all the vertices by keeping track of
- * all the vertices which share continuous X coordinate values.
- *
- * `vertices` are only the vertices which mark a change in direction and are assumed to be in sequential order.
- *
- * Special edge case - what if the first and last vertices are apart of the same edge?
- */
-export const findEdges = (vertices: Vertices): EdgesMap => {
-    const arrayOfVertices = Array.from(vertices);
-    // Keys = X coordinate, Value = Top and bottom Y coordinate bounds
-    const edges: EdgesMap = new Map();
-
-    console.log("Vertices parameter", vertices);
-
-    for (let verticesIndex = 0; verticesIndex < vertices.size; verticesIndex++) {
-        // NOTE: wrap around to 0
-        const vertexNext = verticesIndex === vertices.size - 1
-            ? arrayOfVertices[0]
-            : arrayOfVertices[verticesIndex + 1];
-        const vertexCurrent = arrayOfVertices[verticesIndex];
-
-        // console.log("current", vertexCurrent);
-        // console.log("next", vertexNext);
-
-        if (vertexCurrent[0] !== vertexNext[0]) {
-            continue;
-        }
-        else {
-            const bounds = JSON.stringify([
-                Math.max(vertexCurrent[1], vertexNext[1]),
-                Math.min(vertexCurrent[1], vertexNext[1]),
-            ]);
-            const safeKey = getMapSafeCoordinateValue(vertexCurrent[0]);
-            const set = edges.get(safeKey);
-
-            // console.log("new bounds", bounds);
-            // console.log("unchanged, saving...", safeKey);
-
-            if (set) {
-                set.add(bounds);
-            }
-            else {
-                edges.set(
-                    safeKey,
-                    new Set([ bounds ])
-                );
-            }
-
-            // console.log("edges", edges);
-        }
-    }
-    
-    return edges;
-};
-
-const findVertices = (coordinates: number[][]): Set<number[]> => {
-    const vertices = new Set<number[]>(); 
-
-    for (let i = 0; i < coordinates.length; i++) {
-        const currentCoordinate = coordinates[i];
-        const nextCoordinate = i === coordinates.length - 1
-            ? coordinates[0]
-            : coordinates[i + 1];
-        const previousCoordinate = i === 0
-            ? coordinates[coordinates.length - 1]
-            : coordinates[i - 1];
-
-        if (isCoordinateAVertex(previousCoordinate, nextCoordinate)) {
-            vertices.add(currentCoordinate);
-        }
-    }
-
-    return vertices;
-};
-
-const isCoordinateAVertex = (
-    previousCoordinate: number[],
-    nextCoordinate: number[]
-): boolean => {
-    // If the X and Y of the previous and next coordinates are both different, the current
-    // coordinate changed the direction, a.k.a. it is a vertex
-    return previousCoordinate[0] !== nextCoordinate[0]
-        && previousCoordinate[1] !== nextCoordinate[1];
 };
 
 /*
@@ -149,9 +50,162 @@ const isCoordinateAVertex = (
  * In other words, anytime a line crosses an even number of edges, it MUST not be within
  * the polygon. If a line crosses an odd number of edges, it MUST be within the polygon.
  */
-const castRay = (coordinate: number[], edges: EdgesMap) => {
-    const rayStartPosition = coordinate;
-    const edgesCrossed = 0;
+export const castRay = (edgesInThePathOfTheRay: EdgesMap, coordinate: number[]): number => {
+    let edgesCrossed = 0;
+
+    // TODO: can 
+    Array.from(edgesInThePathOfTheRay).forEach(([ x, edgesAtX ]) => {
+        // 1. Does the coordinate's X exist on the left or right of the edge's X?
+        // 2. Does the coordinate's Y exist within the edge boundaries?
+        if (coordinate[0] > Number(x)) {
+            return;
+        }
+        else {
+            edgesCrossed++;
+        }
+    });
+
+    return edgesCrossed;
+};
+
+/*
+ * findEdges
+ *
+ * Finds the vertical edges among all the vertices by keeping track of
+ * all the vertices which share continuous X coordinate values.
+ *
+ * `vertices` are only the vertices which mark a change in direction and are assumed to be in sequential order.
+ *
+ * Special edge case - what if the first and last vertices are apart of the same edge?
+ */
+export const findEdges = (vertices: Vertices): EdgesMap => {
+    // Keys = X coordinate, Value = Top and bottom Y coordinate bounds
+    const edges: EdgesMap = new Map();
+
+    // console.log("Vertices parameter", vertices);
+
+    for (let verticesIndex = 0; verticesIndex < vertices.length; verticesIndex++) {
+        // NOTE: wrap around to 0 to handle index 0 and -1 making up the same edge
+        const vertexNext = verticesIndex === vertices.length - 1
+            ? vertices[0]
+            : vertices[verticesIndex + 1];
+        const vertexCurrent = vertices[verticesIndex];
+
+        // console.log("current", vertexCurrent);
+        // console.log("next", vertexNext);
+
+        // X values are not equal
+        if (vertexCurrent[0] !== vertexNext[0]) {
+            continue;
+        }
+        else {
+            const yBounds = [
+                Math.max(vertexCurrent[1], vertexNext[1]),
+                Math.min(vertexCurrent[1], vertexNext[1]),
+            ];
+            const safeKey = getMapSafeCoordinateValue(vertexCurrent[0]);
+            const set = edges.get(safeKey);
+
+            // console.log("new bounds", bounds);
+            // console.log("unchanged, saving...", safeKey);
+
+            if (set) {
+                set.push(yBounds);
+            }
+            else {
+                edges.set(
+                    safeKey,
+                    [ yBounds ]
+                );
+            }
+
+            // console.log("edges", edges);
+        }
+    }
+    
+    return edges;
+};
+
+const findVertices = (coordinates: number[][]): Vertices => {
+    const vertices: Vertices = []; 
+
+    for (let i = 0; i < coordinates.length; i++) {
+        const currentCoordinate = coordinates[i];
+        const nextCoordinate = i === coordinates.length - 1
+            ? coordinates[0]
+            : coordinates[i + 1];
+        const previousCoordinate = i === 0
+            ? coordinates[coordinates.length - 1]
+            : coordinates[i - 1];
+
+        if (isCoordinateAVertex(previousCoordinate, nextCoordinate)) {
+            vertices.push(currentCoordinate);
+        }
+    }
+
+    return vertices;
+};
+
+export const getEdgesInPathOfRay = (edges: EdgesMap, coordinate: number[]): EdgesMap => {
+    const edgesInPath: EdgesMap = new Map();
+
+    Array.from(edges).forEach(([ x, edgesAtX ]) => {
+        // Only care about edges where the X is to the right of our coordinate
+        if (Number(x) >= coordinate[0]) {
+            edgesAtX.forEach((yBounds: number[]) => {
+                const yCoordinate = coordinate[1];
+                const yBoundBottom = yBounds[1];
+                const yBoundTop = yBounds[0];
+
+                // console.log("stringCoordinate", stringCoordinate);
+                // console.log("yCoordinate", yCoordinate);
+                // console.log("yBoundBottom", yBoundBottom);
+                // console.log("yBoundTop", yBoundTop);
+
+                if (yBoundBottom <= yCoordinate && yCoordinate <= yBoundTop) {
+                    const bounds = [
+                        yBoundTop,
+                        yBoundBottom,
+                    ];
+
+                    const set = edgesInPath.get(x);
+
+                    if (set) {
+                        set.push(bounds);
+                    }
+                    else {
+                        edgesInPath.set(
+                            x,
+                            [ bounds ]
+                        );
+                    }
+                }
+            });
+        }
+    });
+
+    return edgesInPath;
+};
+
+/*
+ * getMapSafeCoordinateValue
+ *
+ * Returns a Map safe key value (stringified version of an array of numbers)
+ */
+const getMapSafeCoordinateValue = (coordinate: number): string => {
+    const mapKeySafeValue = `${coordinate}`;
+
+    return mapKeySafeValue;
+};
+
+const isCoordinateAVertex = (
+    previousCoordinate: number[],
+    nextCoordinate: number[]
+): boolean => {
+    // If the X and Y of the previous and next coordinates are both different, the current
+    // coordinate changed the direction, a.k.a. it is a vertex
+    return previousCoordinate[0] !== nextCoordinate[0]
+        && previousCoordinate[1] !== nextCoordinate[1];
 };
 
 /*
@@ -164,48 +218,13 @@ const castRay = (coordinate: number[], edges: EdgesMap) => {
  * 1. (a) on the edge
  * 2. (b) in the middle
  */
-export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[], boundaryX: number) => {
-    // TODO: should be a separate function
-    const edgesInThePathOfTheRay = Array.from(edges).filter(([ _, yBoundaries ]) => {
-        return Array.from(yBoundaries).filter((stringCoordinate) => {
-            const yCoordinate = coordinate[1];
-            const yBounds = JSON.parse(stringCoordinate);
-            const yBoundBottom = yBounds[1];
-            const yBoundTop = yBounds[0];
+export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[]) => {
+    const edgesInThePathOfTheRay = getEdgesInPathOfRay(edges, coordinate);
+    const edgesCrossed = castRay(edgesInThePathOfTheRay, coordinate);
 
-            // console.log("stringCoordinate", stringCoordinate);
-            // console.log("yCoordinate", yCoordinate);
-            // console.log("yBoundBottom", yBoundBottom);
-            // console.log("yBoundTop", yBoundTop);
+    console.log("edgesInThePathOfTheRay", edgesInThePathOfTheRay);
+    console.log("edgesCrossed", edgesCrossed);
 
-            if (yBoundBottom <= yCoordinate && yCoordinate <= yBoundTop) {
-                return true;
-            }
-        });
-    });
-    const rayStartPosition = coordinate;
-    let edgesCrossed = 0;
-
-    // TODO: should be a separate function
-    edgesInThePathOfTheRay.forEach(([ x, yBoundaries ]) => {
-        // 1. Does the coordinate's X exist on the left or right of the edge's X?
-        if (coordinate[0] > Number(x)) {
-            return;
-        }
-        else {
-            // 2. Does the coordinate's Y exist within the Y bounds of the edge?
-            const yBoundBottom = Number(Array.from(yBoundaries)[1]);
-            const yBoundTop = Number(Array.from(yBoundaries)[0]);
-
-            if (yBoundBottom <= coordinate[1] && coordinate[1] <= yBoundTop) {
-                edgesCrossed++;
-            }
-        }
-    });
-
-    console.log(edgesCrossed);
-
-    // TODO: should be a separate function
     // If even, the coordinate is not within the polygon
     if (edgesCrossed % 2) {
         return true;
@@ -215,15 +234,66 @@ export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[],
     }
 };
 
-const vertices = findVertices(redTileCoordinates);
-// console.log(JSON.stringify(Array.from(vertices), null, 2));
+if (import.meta.url === `file://${process.argv[1]}`) {
+    console.time("Execution time");
 
-for (let outerIndex = 0; outerIndex < redTileCoordinates.length; outerIndex++) {
-    for (let innerIndex = outerIndex + 1; innerIndex < redTileCoordinates.length; innerIndex++) {
-        // maxArea = Math.max(
-        //     maxArea,
-        //     calculateArea(redTileCoordinates[outerIndex], redTileCoordinates[innerIndex])
-        // );
+    const vertices = findVertices(redTileCoordinates);
+    const edges = findEdges(vertices);
+
+    for (let outerIndex = 0; outerIndex < redTileCoordinates.length; outerIndex++) {
+        for (let innerIndex = outerIndex + 1; innerIndex < redTileCoordinates.length; innerIndex++) {
+            // for (let outerIndex = 0; outerIndex < 5; outerIndex++) {
+            //     for (let innerIndex = outerIndex + 1; innerIndex < 5; innerIndex++) {
+            // For each pair, get the rectangle bounds
+            const bottomRightBound = [
+                Math.max(redTileCoordinates[innerIndex][0], redTileCoordinates[outerIndex][0]),
+                Math.min(redTileCoordinates[innerIndex][1], redTileCoordinates[outerIndex][1]),
+            ];
+            const topLeftBound = [
+                Math.min(redTileCoordinates[innerIndex][0], redTileCoordinates[outerIndex][0]),
+                Math.max(redTileCoordinates[innerIndex][1], redTileCoordinates[outerIndex][1]),
+            ];
+            let allCoordinatesAreWithinBounds = true;
+
+            console.log("outerIndex coordinate", redTileCoordinates[outerIndex]);
+            console.log("innerIndex coordinate", redTileCoordinates[innerIndex]);
+            console.log("topLeftBound", topLeftBound);
+            console.log("bottomRightBound", bottomRightBound);
+            console.log(`Inner loop progress: ${innerIndex}/${redTileCoordinates.length - 1}`);
+            console.log(`Outer loop progress: ${outerIndex}/${redTileCoordinates.length - 1}`);
+
+
+            // Check every point in that rectangle - if ANY point is outside the polygon, skip this pair
+            for (let x = topLeftBound[0]; x <= bottomRightBound[0]; x++) {
+                for (let y = bottomRightBound[1]; y <= topLeftBound[1]; y++) {
+                    console.log("Coordinate within rectangle", x, y);
+
+                    if (!isCoordinateWithinPolygon(edges, [ x, y ])) {
+                        allCoordinatesAreWithinBounds = false;
+                        // Don't calculate more than necessary
+                        break;
+                    }
+                }
+
+                if (!allCoordinatesAreWithinBounds) {
+                    // Don't calculate more than necessary
+                    break;
+                }
+            }
+        
+            // If all points are inside, calculate area and track max
+            if (allCoordinatesAreWithinBounds) {
+                console.log("Calculating the area of", topLeftBound, bottomRightBound);
+
+                maxArea = Math.max(
+                    maxArea,
+                    calculateArea(topLeftBound, bottomRightBound)
+                );
+            }
+        }
     }
-}
 
+    console.log(maxArea);
+    console.timeEnd("Execution time");
+    // 2:37, 2:11, 1:43
+}
