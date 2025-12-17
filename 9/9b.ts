@@ -1,6 +1,6 @@
 import puzzleData from "./9.json" with { type: "json" };
 
-export type EdgesMap = Map<string, number[][]>;
+export type EdgesMap = Map<number, number[][]>;
 export type Vertices = number[][];
 
 /*
@@ -28,7 +28,7 @@ export type Vertices = number[][];
 
 // Coordinates are the vertices of a larger polygon
 const redTileCoordinates = puzzleData.redTileCoordinates;
-let maxArea = 0;
+const maxArea = 0;
 
 const calculateArea = (corner: number[], oppositeCorner: number[]) => {
     // + 1 for inclusiveness (i.e. 7 - 2 = 5, but "width" here means the points on a graph
@@ -44,28 +44,13 @@ const calculateArea = (corner: number[], oppositeCorner: number[]) => {
  *
  * Implements ray casting towards the right.
  *
- * If it crosses an edge, `edgesCrossed` increases by one. If at the end, `edgesCrossed` is 
- * even, the coordinate does NOT lie within the polygon.
- *
- * In other words, anytime a line crosses an even number of edges, it MUST not be within
- * the polygon. If a line crosses an odd number of edges, it MUST be within the polygon.
+ * Counts the number of times a "ray" crosses, which in this case is the number of
+ * edges in the path of the ray.
  */
-export const castRay = (edgesInThePathOfTheRay: EdgesMap, coordinate: number[]): number => {
-    let edgesCrossed = 0;
-
-    // TODO: can 
-    Array.from(edgesInThePathOfTheRay).forEach(([ x, edgesAtX ]) => {
-        // 1. Does the coordinate's X exist on the left or right of the edge's X?
-        // 2. Does the coordinate's Y exist within the edge boundaries?
-        if (coordinate[0] > Number(x)) {
-            return;
-        }
-        else {
-            edgesCrossed++;
-        }
-    });
-
-    return edgesCrossed;
+export const castRay = (edgesInThePathOfTheRay: EdgesMap): number => {
+    return Array.from(edgesInThePathOfTheRay).reduce((acc, [ _, edgesAtX ]) => {
+        return acc += edgesAtX.length;
+    }, 0);
 };
 
 /*
@@ -103,8 +88,7 @@ export const findEdges = (vertices: Vertices): EdgesMap => {
                 Math.max(vertexCurrent[1], vertexNext[1]),
                 Math.min(vertexCurrent[1], vertexNext[1]),
             ];
-            const safeKey = getMapSafeCoordinateValue(vertexCurrent[0]);
-            const set = edges.get(safeKey);
+            const set = edges.get(vertexCurrent[0]);
 
             // console.log("new bounds", bounds);
             // console.log("unchanged, saving...", safeKey);
@@ -114,7 +98,7 @@ export const findEdges = (vertices: Vertices): EdgesMap => {
             }
             else {
                 edges.set(
-                    safeKey,
+                    vertexCurrent[0],
                     [ yBounds ]
                 );
             }
@@ -146,13 +130,19 @@ const findVertices = (coordinates: number[][]): Vertices => {
     return vertices;
 };
 
+/*
+ * getEdgesInPathOfRay
+ *
+ * Returns the vertical edges which will be in the way of the right moving cast ray.
+ */
 // BUG: not even close to working correctly
 export const getEdgesInPathOfRay = (edges: EdgesMap, coordinate: number[]): EdgesMap => {
     const edgesInPath: EdgesMap = new Map();
 
     Array.from(edges).forEach(([ x, edgesAtX ]) => {
-        // Only care about edges where the X is to the right of our coordinate
-        if (Number(x) >= coordinate[0]) {
+        // We don't care about the value of x as long as x is to the right of our coordinate
+        // as we'll later look for Y bounds which lie in the pay of our "ray"
+        if (x > coordinate[0]) {
             edgesAtX.forEach((yBounds: number[]) => {
                 const yCoordinate = coordinate[1];
                 const yBoundBottom = yBounds[1];
@@ -163,6 +153,7 @@ export const getEdgesInPathOfRay = (edges: EdgesMap, coordinate: number[]): Edge
                 // console.log("yBoundBottom", yBoundBottom);
                 // console.log("yBoundTop", yBoundTop);
 
+                // Check to ensure the Y bounds are in the path of our ray
                 if (yBoundBottom <= yCoordinate && yCoordinate <= yBoundTop) {
                     const bounds = [
                         yBoundTop,
@@ -188,17 +179,6 @@ export const getEdgesInPathOfRay = (edges: EdgesMap, coordinate: number[]): Edge
     return edgesInPath;
 };
 
-/*
- * getMapSafeCoordinateValue
- *
- * Returns a Map safe key value (stringified version of an array of numbers)
- */
-const getMapSafeCoordinateValue = (coordinate: number): string => {
-    const mapKeySafeValue = `${coordinate}`;
-
-    return mapKeySafeValue;
-};
-
 const isCoordinateAVertex = (
     previousCoordinate: number[],
     nextCoordinate: number[]
@@ -221,7 +201,7 @@ const isCoordinateAVertex = (
  */
 export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[]) => {
     const edgesInThePathOfTheRay = getEdgesInPathOfRay(edges, coordinate);
-    const edgesCrossed = castRay(edgesInThePathOfTheRay, coordinate);
+    const edgesCrossed = castRay(edgesInThePathOfTheRay);
 
     console.log("edgesInThePathOfTheRay", edgesInThePathOfTheRay);
     console.log("edgesCrossed", edgesCrossed);
@@ -241,10 +221,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const vertices = findVertices(redTileCoordinates);
     const edges = findEdges(vertices);
 
-    for (let outerIndex = 0; outerIndex < redTileCoordinates.length; outerIndex++) {
-        for (let innerIndex = outerIndex + 1; innerIndex < redTileCoordinates.length; innerIndex++) {
-            // for (let outerIndex = 0; outerIndex < 5; outerIndex++) {
-            //     for (let innerIndex = outerIndex + 1; innerIndex < 5; innerIndex++) {
+    // for (let outerIndex = 0; outerIndex < redTileCoordinates.length; outerIndex++) {
+    //     for (let innerIndex = outerIndex + 1; innerIndex < redTileCoordinates.length; innerIndex++) {
+    for (let outerIndex = 0; outerIndex < 5; outerIndex++) {
+        for (let innerIndex = outerIndex + 1; innerIndex < 5; innerIndex++) {
             // For each pair, get the rectangle bounds
             const bottomRightBound = [
                 Math.max(redTileCoordinates[innerIndex][0], redTileCoordinates[outerIndex][0]),
@@ -254,43 +234,49 @@ if (import.meta.url === `file://${process.argv[1]}`) {
                 Math.min(redTileCoordinates[innerIndex][0], redTileCoordinates[outerIndex][0]),
                 Math.max(redTileCoordinates[innerIndex][1], redTileCoordinates[outerIndex][1]),
             ];
-            let allCoordinatesAreWithinBounds = true;
+            const allCoordinatesAreWithinBounds = true;
 
-            console.log("outerIndex coordinate", redTileCoordinates[outerIndex]);
-            console.log("innerIndex coordinate", redTileCoordinates[innerIndex]);
+            // NOTE: comment out to process all polygons regardless of whether it is effectively a straight line
+            if (bottomRightBound[1] === topLeftBound[1] || bottomRightBound[0] === topLeftBound[0]) {
+                continue;
+            }
+
             console.log("topLeftBound", topLeftBound);
             console.log("bottomRightBound", bottomRightBound);
-            console.log(`Inner loop progress: ${innerIndex}/${redTileCoordinates.length - 1}`);
-            console.log(`Outer loop progress: ${outerIndex}/${redTileCoordinates.length - 1}`);
+            // console.log(`Inner loop progress: ${innerIndex}/${redTileCoordinates.length - 1}`);
+            // console.log(`Outer loop progress: ${outerIndex}/${redTileCoordinates.length - 1}`);
+            
+            console.log("is topLeftBound in the polygon", isCoordinateWithinPolygon(edges, topLeftBound));
+            console.log("is bottomRightBound in the polygon", isCoordinateWithinPolygon(edges, bottomRightBound));
 
 
             // Check every point in that rectangle - if ANY point is outside the polygon, skip this pair
-            for (let x = topLeftBound[0]; x <= bottomRightBound[0]; x++) {
-                for (let y = bottomRightBound[1]; y <= topLeftBound[1]; y++) {
-                    console.log("Coordinate within rectangle", x, y);
-
-                    if (!isCoordinateWithinPolygon(edges, [ x, y ])) {
-                        allCoordinatesAreWithinBounds = false;
-                        // Don't calculate more than necessary
-                        break;
-                    }
-                }
-
-                if (!allCoordinatesAreWithinBounds) {
-                    // Don't calculate more than necessary
-                    break;
-                }
-            }
-        
-            // If all points are inside, calculate area and track max
-            if (allCoordinatesAreWithinBounds) {
-                console.log("Calculating the area of", topLeftBound, bottomRightBound);
-
-                maxArea = Math.max(
-                    maxArea,
-                    calculateArea(topLeftBound, bottomRightBound)
-                );
-            }
+            // for (let x = topLeftBound[0]; x <= bottomRightBound[0]; x++) {
+            //     for (let y = bottomRightBound[1]; y <= topLeftBound[1]; y++) {
+            //         console.log("Coordinate within rectangle", x, y);
+            //
+            //         if (!isCoordinateWithinPolygon(edges, [ x, y ])) {
+            //             allCoordinatesAreWithinBounds = false;
+            //             // Don't calculate more than necessary
+            //             break;
+            //         }
+            //     }
+            //
+            //     if (!allCoordinatesAreWithinBounds) {
+            //         // Don't calculate more than necessary
+            //         break;
+            //     }
+            // }
+            //
+            // // If all points are inside, calculate area and track max
+            // if (allCoordinatesAreWithinBounds) {
+            //     console.log("Calculating the area of", topLeftBound, bottomRightBound);
+            //
+            //     maxArea = Math.max(
+            //         maxArea,
+            //         calculateArea(topLeftBound, bottomRightBound)
+            //     );
+            // }
         }
     }
 
