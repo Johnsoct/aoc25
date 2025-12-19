@@ -47,10 +47,25 @@ const calculateArea = (corner: number[], oppositeCorner: number[]) => {
  * Counts the number of times a "ray" crosses, which in this case is the number of
  * edges in the path of the ray.
  */
-export const castRay = (edgesInThePathOfTheRay: EdgesMap): number => {
-    return Array.from(edgesInThePathOfTheRay).reduce((acc, [ _, edgesAtX ]) => {
+export const castRay = (edgesInThePathOfTheRay: EdgesMap): boolean => {
+    const edgesCrossed = Array.from(edgesInThePathOfTheRay).reduce((acc, [ _, edgesAtX ]) => {
         return acc += edgesAtX.length;
     }, 0);
+
+    console.log("edgesInThePathOfTheRay", edgesInThePathOfTheRay);
+    console.log("edgesCrossed", edgesCrossed);
+
+    // 0 is only valid because the edges are predetermined to be in the path of the ray
+    if (edgesCrossed === 0) {
+        return true;
+    }
+    // If even, the coordinate is not within the polygon
+    else if (edgesCrossed % 2) {
+        return false;
+    }
+    else {
+        return true;
+    }
 };
 
 /*
@@ -110,7 +125,13 @@ export const findEdges = (vertices: Vertices): EdgesMap => {
     return edges;
 };
 
-const findVertices = (coordinates: number[][]): Vertices => {
+/*
+ * findVertices
+ *
+ * Finds all the coordinates which represent a change in direction from the
+ * other "collinear" points in the coordinates.
+ */
+export const findVertices = (coordinates: number[][]): Vertices => {
     const vertices: Vertices = []; 
 
     for (let i = 0; i < coordinates.length; i++) {
@@ -135,13 +156,14 @@ const findVertices = (coordinates: number[][]): Vertices => {
  *
  * Returns the vertical edges which will be in the way of the right moving cast ray.
  */
-// BUG: not even close to working correctly
+// TODO: needs refactored to account for coordinates on an edge
 export const getEdgesInPathOfRay = (edges: EdgesMap, coordinate: number[]): EdgesMap => {
     const edgesInPath: EdgesMap = new Map();
 
     Array.from(edges).forEach(([ x, edgesAtX ]) => {
         // We don't care about the value of x as long as x is to the right of our coordinate
         // as we'll later look for Y bounds which lie in the pay of our "ray"
+        // TODO: this is causing castRay to not count coordinates on the right edge
         if (x > coordinate[0]) {
             edgesAtX.forEach((yBounds: number[]) => {
                 const yCoordinate = coordinate[1];
@@ -201,18 +223,8 @@ const isCoordinateAVertex = (
  */
 export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[]) => {
     const edgesInThePathOfTheRay = getEdgesInPathOfRay(edges, coordinate);
-    const edgesCrossed = castRay(edgesInThePathOfTheRay);
 
-    console.log("edgesInThePathOfTheRay", edgesInThePathOfTheRay);
-    console.log("edgesCrossed", edgesCrossed);
-
-    // If even, the coordinate is not within the polygon
-    if (edgesCrossed % 2) {
-        return true;
-    }
-    else {
-        return false;
-    }
+    return castRay(edgesInThePathOfTheRay);
 };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -220,6 +232,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     const vertices = findVertices(redTileCoordinates);
     const edges = findEdges(vertices);
+    
+    console.log("Total edges found:", edges.size);
+    console.log("Edge X coordinates:", Array.from(edges.keys()).sort((a, b) => {
+        return a - b; 
+    }));
+    console.log("Min X:", Math.min(...edges.keys()));
+    console.log("Max X:", Math.max(...edges.keys()));
 
     // for (let outerIndex = 0; outerIndex < redTileCoordinates.length; outerIndex++) {
     //     for (let innerIndex = outerIndex + 1; innerIndex < redTileCoordinates.length; innerIndex++) {
