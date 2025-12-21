@@ -1,16 +1,35 @@
+import {
+    parentPort,
+    workerData,
+} from "worker_threads";
+
 import puzzleData from "./9.json" with { type: "json" };
 
-export type EdgesMap = Map<number, number[][]>;
-export type Vertices = number[][];
+type coordinate = number[];
+
+type edges = number[];
+
+type keySafeCoordinate = string;
+
+type y = number;
+
+export type EdgesMap = Map<y, edges[]>;
+export type Vertices = coordinate[];
 
 /*
  * Optimization ideas
  *
- * 1. Check all coordinates on the edges before coordinates inside
+ * 1. ~Check all coordinates on the edges before coordinates inside~
+ *      1.1 Neither set, map, arrays... can handle billions of coordinates...
+ *      was failling at 16.7M values in a  set
  * 2. ... Run on multiple CPU cores, rofl
  */
 
-const getSafeMapKey = ([ x, y ]: number[]) => {
+// Helper functions
+// Helper functions
+// Helper functions
+
+const getSafeMapKey = ([ x, y ]: coordinate): keySafeCoordinate => {
     return `${x},${y}`;
 };
 
@@ -56,6 +75,10 @@ const visualizePolygon = (coordinates: number[][]) => {
     }
 };
 
+// LOGIC
+// LOGIC
+// LOGIC
+
 /*
  * Ray casting (even-odd rule):
  *
@@ -79,127 +102,7 @@ const visualizePolygon = (coordinates: number[][]) => {
  *      3.3. Update `maxArea`
  */
 
-type edges = number[];
-
-type keySafeCoordinate = string;
-
-type x = number;
-
-type y = number;
-
 // Coordinates are the vertices of a larger polygon
-
-const redTileCoordinates = puzzleData.redTileCoordinates;
-let maxArea = 0;
-
-const setTiles = (
-    redTileCoordinates: number[][],
-    edges: EdgesMap
-) => {
-    const greenTiles = new Set<keySafeCoordinate>();
-    const redTiles = new Set<keySafeCoordinate>();
-    const redTilesByYCoordinate = new Map<y, edges>();
-    let maxY = 0;
-    let minY = 0;
-
-    redTileCoordinates.forEach((coordinate) => {
-        maxY = Math.max(maxY, coordinate[1]);
-        minY = Math.min(minY, coordinate[1]);
-
-        // Update red tiles set
-        redTiles.add(getSafeMapKey(coordinate));
-
-        // Update red tiles map by y coordinates
-        if (redTilesByYCoordinate.has(coordinate[1])) {
-            redTilesByYCoordinate.get(coordinate[1])!.push(coordinate[0]);
-        }
-        else {
-            redTilesByYCoordinate.set(coordinate[1], [ coordinate[0] ]);
-        }
-    });
-
-    // Update our greentiles
-    /*
-     * Using "scanline," we will add any coordinate between two
-     * red tiles to the green tiles with respect to a coordinate
-     * being out of bounds of the polygon
-     */
-
-    for (let yCoordinate = minY; yCoordinate < maxY; yCoordinate++) {
-        // If there are not precalculating xBoundaries from the existence of red
-        // tiles, we need to find the xBoundaries from the edges of the polygon
-        const xBoundaries = redTilesByYCoordinate.has(yCoordinate)
-            ? redTilesByYCoordinate.get(yCoordinate)
-            : Array.from(getEdgesInPathOfRay(edges, [ 0, yCoordinate ]).keys());
-
-        if (!xBoundaries) {
-            continue;
-        }
-
-        // The red tile coordinates follow the polygon's vertices in a circular 
-        // patter, not row-by-row and left-to-right
-        xBoundaries.sort((a, b) => {
-            return a - b;
-        });
-
-        /*
-         * We need to avoid adding coordinates in a concave portion of a polygon:
-         *
-         * 1. Starting at the first edge, assumed the start of a convex polygon,
-         * of the edges at coordinate Y, calculate the coordinates up to, and including
-         * the next edge at coordinate Y.
-         *
-         * 2. Given indices start at 0, skip when the left bound edge is an odd index
-         * and the right bound edge is an even index (utiliing %)
-         *
-         * 3. Repeat until out of edges
-         *
-         * ------------------------------------------------------------
-         * Related to step 2, what conditions are true when edge A is on the left
-         * bounds and edge B is on the right bounds of a concave portion?
-         * ------------------------------------------------------------
-         * 1. Edge A is at an odd index of edges.length (since indices start at 0)
-         * 2. Edge B is at an even index of edges.length (% 2 === 0)
-         *
-         * Since there are always two red tiles at every Y coordinate, we know
-         * the first edge is also the START of a convex portion, and the next
-         * edge must be the opposing edge of the convext potion. However, if
-         * there is a third edge, it represents a gap in the row, or the right
-         * bound of a concave portion, which started at the second edge:
-         * . . . . . X X X . . . X X
-         * . . . . . A . B . . . C D
-         *
-         * A, B, C, and D are edges.
-         * A -> B and C -> D are convex portions.
-         * B -> C is a concave portion, and the coordinates between (exclusive of
-         * the bounds) should not be considered green tiles.
-         *
-         * By increasing our index by 2, we naturally skip concave sections.
-         */
-
-        for (let edgeIndex = 0; edgeIndex < xBoundaries.length - 1; edgeIndex += 2) {
-            const xleftBound = xBoundaries[edgeIndex];
-            const xRightBound = xBoundaries[edgeIndex + 1];
-
-            for (let xCoordinate = xleftBound; xCoordinate < xRightBound; xCoordinate++) {
-                try {
-                    greenTiles.add(getSafeMapKey([ xCoordinate, yCoordinate ]));
-                }
-                catch {
-                    console.log(greenTiles.size);
-                }
-            }
-        };
-    }
-
-    return {
-        greenTiles,
-        redTiles,
-        redTilesByYCoordinate,
-    };
-};
-
-// visualizePolygon(redTileCoordinates);
 
 const calculateArea = (corner: number[], oppositeCorner: number[]) => {
     // + 1 for inclusiveness (i.e. 7 - 2 = 5, but "width" here means the points on a graph
@@ -432,25 +335,17 @@ export const isRectangleAStraightLine = (coordinates: number[][]): boolean => {
 const execution = () => {
     console.time("Execution time");
 
+    const {
+        endIndex,
+        startIndex,
+    } = workerData;
+    const redTileCoordinates = puzzleData.redTileCoordinates;
     const vertices = findVertices(redTileCoordinates);
     const edges = findEdges(vertices);
-
-    // const {
-    //     greenTiles,
-    //     redTiles,
-    //     redTilesByYCoordinate,
-    // } = setTiles(
-    //     puzzleData.redTileCoordinates,
-    //     edges
-    // );
+    let maxArea = 0;
 
 
-    // console.log("green", greenTiles);
-    // console.dir(greenTiles, { depth: null, maxArrayLength: null });
-    // console.log("red", redTiles);
-
-    for (let outerIndex = 0; outerIndex < redTileCoordinates.length; outerIndex++) {
-    // for (let outerIndex = 0; outerIndex < 49; outerIndex++) {
+    for (let outerIndex = startIndex; outerIndex < endIndex; outerIndex++) {
     // To avoid "RangeError: Set maximum size exceeded", clear the memoized ray casted coordinates on each outer loop
     // trueRayCastedCoordinates.clear();
 
@@ -518,9 +413,10 @@ const execution = () => {
         }
     }
 
-    console.log(maxArea);
     console.timeEnd("Execution time");
     // 2:37, 2:11, 1:43, 1:37:00
+    
+    parentPort?.postMessage({ maxArea });
 };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
