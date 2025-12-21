@@ -6,10 +6,12 @@ import {
 } from "vitest";
 
 import {
+    areRectangleCornersWithinPolygon,
     castRay,
     findEdges,
     findVertices,
     getEdgesInPathOfRay,
+    isCoordinateOnAVerticalEdge,
     isCoordinateWithinPolygon,
 } from "./9b";
 
@@ -23,16 +25,44 @@ interface Test {
     expectation?: any;
 };
 
-describe("castRay", () => {
-    const evenTests: Test[] = [];
+describe("areRectangleCornersWithinPolygon", () => {
+    // Edgeds make a big square
+    const edges = new Map([
+        [ -10, [ [ 10,-10 ] ] ],
+        [ 10, [ [ 10,-10 ] ] ],
+    ]);
+    const happy = [
+        [ [ -10, -10 ], [ 10, 10 ] ],
+        [ [ 3, -10 ], [ 10, 0 ] ],
+        [ [ 9, -3 ], [ -7, 4 ] ],
+    ];
+    const sad = [
+        // Both should have to be within
+        [ [ -11, -10 ], [ 10, 10 ] ],
+    ];
 
-    const truthyCases: Test[] = [
+    happy.forEach((coordinates) => {
+        test(`Coordinates: ${coordinates[0]}, ${coordinates[1]}`, () => {
+            expect(areRectangleCornersWithinPolygon(edges, coordinates)).toEqual(true);
+        });
+    });
+
+    sad.forEach((coordinates) => {
+        test(`Coordinates: ${coordinates[0]}, ${coordinates[1]}`, () => {
+            expect(areRectangleCornersWithinPolygon(edges, coordinates)).toEqual(false);
+        });
+    });
+});
+
+describe("castRay", () => {
+    const tests: Test[] = [
         {
             coordinate: [ -3, 0 ],
             edges: new Map([
                 // Crosses once at [-1,0]
                 [ -1, [ [ 1,-1 ] ] ],
             ]),
+            expectation: 1,
         },
         {
             coordinate: [ 3, 0 ],
@@ -41,6 +71,7 @@ describe("castRay", () => {
                 // Crosses once at [4,0]
                 [ 4, [ [ 7,-14 ] ] ],
             ]),
+            expectation: 1,
         },
         {
             coordinate: [ 0, 0 ],
@@ -52,6 +83,7 @@ describe("castRay", () => {
                 // Crosses once at [333,0]
                 [ 333, [ [ 1000,-1000 ] ] ],
             ]),
+            expectation: 3,
         },
         {
             coordinate: [ 0, 0 ],
@@ -60,6 +92,7 @@ describe("castRay", () => {
                 // Crosses at [1,0]
                 [ 1, [ [ 1,-1 ] ] ],
             ]),
+            expectation: 1,
         },
         // Left edge
         {
@@ -68,6 +101,7 @@ describe("castRay", () => {
                 [ -1, [ [ 1,-1 ] ] ],
                 [ 1, [ [ 1,-1 ] ] ],
             ]),
+            expectation: 1,
         },
         // Top edge
         {
@@ -76,6 +110,7 @@ describe("castRay", () => {
                 [ -1, [ [ 1,-1 ] ] ],
                 [ 1, [ [ 1,-1 ] ] ],
             ]),
+            expectation: 1,
         },
         // Right edge
         {
@@ -84,6 +119,7 @@ describe("castRay", () => {
                 [ -1, [ [ 1,-1 ] ] ],
                 [ 1, [ [ 1,-1 ] ] ],
             ]),
+            expectation: 0,
         },
         // Bottom edge
         {
@@ -92,12 +128,13 @@ describe("castRay", () => {
                 [ -1, [ [ 1,-1 ] ] ],
                 [ 1, [ [ 1,-1 ] ] ],
             ]),
+            expectation: 1,
         },
     ];
 
-    truthyCases.forEach(({ coordinate, edges }) => {
+    tests.forEach(({ coordinate, edges, expectation }) => {
         test(`castRay returns true for ${coordinate}`, () => {
-            expect(castRay(getEdgesInPathOfRay(edges, coordinate))).toEqual(true);
+            expect(castRay(getEdgesInPathOfRay(edges, coordinate))).toEqual(expectation);
         });
     });
 });
@@ -343,6 +380,39 @@ describe("getEdgesInPathOfRay", () => {
     });
 });
 
+describe("isCoordinateOnAVerticalEdge", () => {
+    const edges = new Map([
+        [ -10, [ [ 10,-10 ] ] ],
+        [ 10, [ [ 10,-10 ] ] ],
+    ]);
+    const happy = [
+        // Four corners
+        [ 10, 10 ],
+        [ 10, -10 ],
+        [ -10, 10 ],
+        [ -10, -10 ],
+        // Middle of each edge
+        [ 10, 0 ],
+        [ -10, 0 ],
+    ];
+    const sad = [
+        [ 5, 10 ],
+        [ 5, -10 ],
+    ];
+
+    happy.forEach((coordinate) => {
+        test(`${coordinate}`, () => {
+            expect(isCoordinateOnAVerticalEdge(edges, coordinate)).toEqual(true);
+        });
+    });
+
+    sad.forEach((coordinate) => {
+        test(`${coordinate}`, () => {
+            expect(isCoordinateOnAVerticalEdge(edges, coordinate)).toEqual(false);
+        });
+    });
+});
+
 describe("isCoordinateWithinPolygon", () => {
     const falses: Test[] = [
         {
@@ -356,6 +426,17 @@ describe("isCoordinateWithinPolygon", () => {
             edges: new Map([
                 [ -1, [ [ 1,-1 ] ] ],
                 [ 1, [ [ 1,-1 ] ] ],
+            ]),
+        },
+        {
+            coordinate: [ 9, 13 ],
+            edges: new Map([
+                [ -1, [ [ 1,-1 ] ] ],
+                [ 1, [ [ 1,-1 ] ] ],
+                // Crosses at [ 12, 13 ]
+                [ 12, [ [ 27,-1 ] ] ],
+                // Crosses at [ 32, 13 ]
+                [ 32, [ [ 41,-1 ] ] ],
             ]),
         },
     ];
@@ -398,6 +479,20 @@ describe("isCoordinateWithinPolygon", () => {
             edges: new Map([
                 [ -1, [ [ 1,-1 ] ] ],
                 // Crosses at [1,0]
+                [ 1, [ [ 1,-1 ] ] ],
+            ]),
+        },
+        {
+            coordinate: [ 0, 1 ],  // Top horizontal edge
+            edges: new Map([
+                [ -1, [ [ 1,-1 ] ] ],
+                [ 1, [ [ 1,-1 ] ] ],
+            ]),
+        },
+        {
+            coordinate: [ 0, -1 ],  // Bottom horizontal edge
+            edges: new Map([
+                [ -1, [ [ 1,-1 ] ] ],
                 [ 1, [ [ 1,-1 ] ] ],
             ]),
         },
