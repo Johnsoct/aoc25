@@ -5,6 +5,14 @@ import {
 
 import puzzleData from "./9.json" with { type: "json" };
 
+/*
+ * NOTE:
+ *
+ * `tsx` is required to run this becuase we're using TS files
+ *
+ * `tsx workers.ts`
+ */
+
 type coordinate = number[];
 
 type edges = number[];
@@ -137,9 +145,10 @@ export const castRay = (edgesInThePathOfTheRay: EdgesMap): number => {
  *
  * Special edge case - what if the first and last vertices are apart of the same edge?
  */
-export const findEdges = (vertices: Vertices): EdgesMap => {
+export const findEdges = (vertices: Vertices): { xEdges: EdgesMap, yEdges: EdgesMap } => {
     // Keys = X coordinate, Value = Top and bottom Y coordinate bounds
-    const edges: EdgesMap = new Map();
+    const xEdges: EdgesMap = new Map();
+    const yEdges: EdgesMap = new Map();
 
     for (let verticesIndex = 0; verticesIndex < vertices.length; verticesIndex++) {
         // NOTE: wrap around to 0 to handle index 0 and -1 making up the same edge
@@ -157,21 +166,46 @@ export const findEdges = (vertices: Vertices): EdgesMap => {
                 Math.max(vertexCurrent[1], vertexNext[1]),
                 Math.min(vertexCurrent[1], vertexNext[1]),
             ];
-            const set = edges.get(vertexCurrent[0]);
+            const set = xEdges.get(vertexCurrent[0]);
 
             if (set) {
                 set.push(yBounds);
             }
             else {
-                edges.set(
+                xEdges.set(
                     vertexCurrent[0],
                     [ yBounds ]
                 );
             }
         }
+
+        // Y values are not equal
+        if (vertexCurrent[1] !== vertexNext[1]) {
+            continue;
+        }
+        else {
+            const xBounds = [
+                Math.max(vertexCurrent[0], vertexNext[0]),
+                Math.min(vertexCurrent[0], vertexNext[0]),
+            ];
+            const set = yEdges.get(vertexCurrent[1]);
+
+            if (set) {
+                set.push(xBounds);
+            }
+            else {
+                yEdges.set(
+                    vertexCurrent[1],
+                    [ xBounds ]
+                );
+            }
+        }
     }
     
-    return edges;
+    return {
+        xEdges,
+        yEdges,
+    };
 };
 
 /*
@@ -332,26 +366,69 @@ export const isRectangleAStraightLine = (coordinates: number[][]): boolean => {
     return y1 === y2 || x1 === x2; 
 };
 
+export const getPolgonBoundsAtX = (edges: EdgesMap, x: number): { maxY: number, minY: number } | null => {
+    const edgesAtX = edges.get(x);
+
+    if (edgesAtX) {
+        let maxY = Infinity;
+        let minY = -Infinity;
+
+        edgesAtX.forEach((edge) => {
+            maxY = Math.max(maxY, edge[0]);
+            minY = Math.min(minY, edge[1]);
+        });
+
+        return {
+            maxY,
+            minY,
+        };
+    }
+    else {
+        return null;
+    }
+};
+
+export const getPolgonBoundsAtY = (edges: EdgesMap, y: number): { maxX: number, minX: number } | null => {
+    const edgesAtY = edges.get(y);
+
+    if (edgesAtY) {
+        let maxX = Infinity;
+        let minX = -Infinity;
+
+        edgesAtY.forEach((edge) => {
+            maxX = Math.max(maxX, edge[0]);
+            minX = Math.min(minX, edge[1]);
+        });
+
+        return {
+            maxX,
+            minX,
+        };
+    }
+    else {
+        return null;
+    }
+};
+
 const execution = () => {
     console.time("Execution time");
 
     const {
-        endIndex,
-        startIndex,
+        workerIndex,
+        workerNumber,
     } = workerData;
     const redTileCoordinates = puzzleData.redTileCoordinates;
     const vertices = findVertices(redTileCoordinates);
-    const edges = findEdges(vertices);
+    const { xEdges, yEdges } = findEdges(vertices);
     let maxArea = 0;
 
 
-    for (let outerIndex = startIndex; outerIndex < endIndex; outerIndex++) {
-    // To avoid "RangeError: Set maximum size exceeded", clear the memoized ray casted coordinates on each outer loop
-    // trueRayCastedCoordinates.clear();
+    for (let outerIndex = workerIndex; outerIndex < redTileCoordinates.length; outerIndex += workerNumber) {
+        // console.log(`Progress: ${outerIndex}/${redTileCoordinates.length - 1}`);
 
         for (let innerIndex = outerIndex + 1; innerIndex < redTileCoordinates.length; innerIndex++) {
             if (innerIndex % 10 === 0) {
-                console.log(`Progress: ${outerIndex}/${redTileCoordinates.length - 1} - ${innerIndex}/${redTileCoordinates.length - 1}`);
+                // console.log(`Progress: ${outerIndex}/${redTileCoordinates.length - 1} - ${innerIndex}/${redTileCoordinates.length - 1}`);
             }
 
             // For each pair, get the rectangle bounds
@@ -371,10 +448,14 @@ const execution = () => {
                 bottomRightBound[0],
                 topLeftBound[1],
             ];
+            const bottomY = bottomLeftBound[1];
+            const leftX = bottomLeftBound[0];
+            const rightX = topRightBound[0];
+            const topY = topLeftBound[1];
 
             // No point processing internal coordinates if the four corners aren't all within the polygon
             // and we know the bottomRightBound and topLeftBound are because they come from the redTileCoordinates
-            if (!areRectangleCornersWithinPolygon(edges, [ bottomLeftBound, topRightBound ])) {
+            if (!areRectangleCornersWithinPolygon(xEdges, [ bottomLeftBound, bottomRightBound, topLeftBound, topRightBound ])) {
                 continue;
             }
 
@@ -383,38 +464,38 @@ const execution = () => {
                 continue;
             }
 
-            let allCoordinatesAreWithinBounds = true;
+            const topEdgeBounds = getPolgonBoundsAtY(yEdges, topY);
 
-            // Check every point in that rectangle - if ANY point is outside the polygon, skip this pair
-            for (let x = topLeftBound[0]; x <= bottomRightBound[0]; x++) {
-                if (!allCoordinatesAreWithinBounds) {
-                // Don't calculate more than necessary
-                    break;
-                }
-
-                for (let y = bottomRightBound[1]; y <= topLeftBound[1]; y++) {
-                    if (!isCoordinateWithinPolygon(edges, [ x, y ])) {
-                        allCoordinatesAreWithinBounds = false;
-                        // Don't calculate more than necessary
-                        break;
-                    }
-                }
+            if (!topEdgeBounds || (leftX < topEdgeBounds.minX || rightX > topEdgeBounds.maxX)) {
+                continue;
             }
 
-            // If all points are inside, calculate area and track max
-            if (allCoordinatesAreWithinBounds) {
-                console.log(`Found valid rectangle! Area: ${calculateArea(topLeftBound, bottomRightBound)}`);
+            const bottomEdgeBounds = getPolgonBoundsAtY(yEdges, bottomY);
 
-                maxArea = Math.max(
-                    maxArea,
-                    calculateArea(topLeftBound, bottomRightBound)
-                );
+            if (!bottomEdgeBounds || (leftX < bottomEdgeBounds.minX || rightX > bottomEdgeBounds.maxX)) {
+                continue;
             }
+
+            const leftEdgeBounds = getPolgonBoundsAtX(xEdges, leftX);
+
+            if (!leftEdgeBounds || (bottomY < leftEdgeBounds.minY || topY > leftEdgeBounds.maxY)) {
+                continue;
+            }
+
+            const rightEdgeBounds = getPolgonBoundsAtX(xEdges, rightX);
+
+            if (!rightEdgeBounds || (bottomY < rightEdgeBounds.minY || topY > rightEdgeBounds.maxY)) {
+                continue;
+            }
+
+            maxArea = Math.max(maxArea, calculateArea(bottomLeftBound, topRightBound)); 
         }
     }
 
     console.timeEnd("Execution time");
     // 2:37, 2:11, 1:43, 1:37:00
+    // 8-core with pre-divided chunk sizes - 54m
+    // 8-core with each sequentially red tile coordinate assigned to a different worker - 30m
     
     parentPort?.postMessage({ maxArea });
 };

@@ -1,21 +1,14 @@
 import { Worker } from "worker_threads";
 
-import puzzleData from "./9.json" with { type: "json" };
-
-const workerNumber = 4;
-const chunkSize = Math.ceil(puzzleData.redTileCoordinates.length / workerNumber);
-
+const workerNumber = 12;
 let overallMaxArea = 0;
 let workersCompleted = 0;
 
 for (let workerIndex = 0; workerIndex < workerNumber; workerIndex++) {
-    const startIndex = workerIndex * chunkSize;
-    const endIndex = Math.min(startIndex + chunkSize, puzzleData.redTileCoordinates.length);
-
     const worker = new Worker("./9b.ts", {
         workerData: {
-            endIndex,
-            startIndex,
+            workerIndex,
+            workerNumber,
         },
     });
 
