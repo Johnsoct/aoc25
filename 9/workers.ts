@@ -1,6 +1,6 @@
 import { Worker } from "worker_threads";
 
-const workerNumber = 12;
+const workerNumber = 1;
 let overallMaxArea = 0;
 let workersCompleted = 0;
 

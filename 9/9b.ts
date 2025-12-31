@@ -1,122 +1,28 @@
-import {
-    parentPort,
-    workerData,
-} from "worker_threads";
-
 import puzzleData from "./9.json" with { type: "json" };
 
-/*
- * NOTE:
- *
- * `tsx` is required to run this becuase we're using TS files
- *
- * `tsx workers.ts`
- */
+export type Coordinate = number[];
 
-type coordinate = number[];
+export type Directions = "down" | "left" | "right" | "up";
 
-type edges = number[];
+export type Edges = number[];
 
-type keySafeCoordinate = string;
+export type KeySafeCoordinate = string;
 
-type y = number;
+export type Y = number;
 
-export type EdgesMap = Map<y, edges[]>;
-export type Vertices = coordinate[];
+export type EdgesMap = Map<Y, Set<Edges>>;
+export type Vertices = Coordinate[];
 
-/*
- * Optimization ideas
- *
- * 1. ~Check all coordinates on the edges before coordinates inside~
- *      1.1 Neither set, map, arrays... can handle billions of coordinates...
- *      was failling at 16.7M values in a  set
- * 2. ... Run on multiple CPU cores, rofl
- */
-
-// Helper functions
-// Helper functions
-// Helper functions
-
-const getSafeMapKey = ([ x, y ]: coordinate): keySafeCoordinate => {
-    return `${x},${y}`;
-};
-
-const visualizePolygon = (coordinates: number[][]) => {
-    // Find bounds
-    const minX = Math.min(...coordinates.map((c) => {
-        return c[0]; 
-    }));
-    const maxX = Math.max(...coordinates.map((c) => {
-        return c[0]; 
-    }));
-    const minY = Math.min(...coordinates.map((c) => {
-        return c[1]; 
-    }));
-    const maxY = Math.max(...coordinates.map((c) => {
-        return c[1]; 
-    }));
-    
-    // Scale down if needed (your coords are huge)
-    const scale = Math.max(
-        Math.ceil((maxX - minX) / 100),
-        Math.ceil((maxY - minY) / 100)
-    );
-    
-    const coordSet = new Set(coordinates.map((c) => {
-        return `${Math.floor((c[0] - minX) / scale)},${Math.floor((c[1] - minY) / scale)}`; 
-    }
-    ));
-    
-    const width = Math.ceil((maxX - minX) / scale);
-    const height = Math.ceil((maxY - minY) / scale);
-    
-    for (let y = height; y >= 0; y--) {
-        let row = '';
-
-        for (let x = 0; x <= width; x++) {
-            row += coordSet.has(`${x},${y}`)
-                ? '#'
-                : '.';
-        }
-
-        console.log(row);
-    }
-};
-
-// LOGIC
-// LOGIC
-// LOGIC
-
-/*
- * Ray casting (even-odd rule):
- *
- * Draw an imaginary line from a coordinate in any direction.
- *
- * If the line crosses the edge of the polygon only once, it's within the polygon.
- * If the line crosses the edge of the polygon more than once, it's not within the polygon.
- *
- * Our problem is unique because although the coordinates build a polygon, the problem is to
- * only find red tiles which are in diagonal opposition of another red tile, a.k.a. we are
- * only looking for rectangular shapes, so we don't have to worry about the complexity of
- * checking whether our imaginary line crosses a diagonal line.
- *
- * 1. Create a Set of all the vertices among the collinear points (the red tile coordinates)
- * 2. Create a Map of all the vertical edges of the polygon with the X coordinate as the key
- * and the top and bottom Y coordinates as the values
- * 3. Repeat the solution to part one except before calculating the area, check each point
- * in the rectangle to ensure each point is within bounds using ray casting
- *      3.1. If not, skip
- *      3.2. Calculate the area
- *      3.3. Update `maxArea`
- */
-
-// Coordinates are the vertices of a larger polygon
+const coordinatesOutsideOfPolygon = new Set<string>();
 
 const calculateArea = (corner: number[], oppositeCorner: number[]) => {
-    // + 1 for inclusiveness (i.e. 7 - 2 = 5, but "width" here means the points on a graph
-    // along the line, which is 6 from X7 to X2)
+    // Corner: [ 97634, 50187 ], Opposite corner: [ 97839, 50187 ]
+    // height: 1 = 50187 - 50187
+    // width: 205 = 97839 - 97634
     const height = Math.abs(corner[1] - oppositeCorner[1]) + 1;
     const width = Math.abs(corner[0] - oppositeCorner[0]) + 1;
+    // const height = Math.max(Math.abs(corner[1] - oppositeCorner[1]), 1);
+    // const width = Math.max(Math.abs(corner[0] - oppositeCorner[0]), 1);
 
     return height * width;
 };
@@ -128,11 +34,134 @@ const calculateArea = (corner: number[], oppositeCorner: number[]) => {
  *
  * Counts the number of times a "ray" crosses, which in this case is the number of
  * edges in the path of the ray.
+ *
+ * When checking if a coordinate is within the polygon, we "cast" a ray from the coordinate
+ * towards X direction and count the number of edges the ray crosses. To cast the ray, we
+ * need to know the edges in the path of the ray, so this returns the vertical edges which
+ * will be in the way of the right moving cast ray.
+ *
+ * A canonical vertical-edge check: "a ray from (px, py) crosses a vertical segment
+ * at x=xEdge if `xEdge > px` **and** `py` is between `[bottom, top)`.
+ *
+ * There is a term, "half-open," which means you leave on boundaries "half-open" to
+ * avoid double-counting edges when have the same Y value but different X values.
+ *
+ * Example of a finding an edge for a coordinateStart of (-4, 3):
+ *     (1,10) .
+ *            |
+ *     (1, 3) .__. (5, 3)
+ *
+ * Here we have a coordinate which will technically intersect two edges; however,
+ * only one edge should count since the first edge is a vertex which connects
+ * to a horizontal edge ((1,3) is the bottom bound of a vertical edge but it
+ * connects with the line segment between (1, 3) and (5, 3); therefore only
+ * the edge at (5, 3) should count for the casted ray). "half-open" intervals
+ * prevents the vertical edge at x=5 from counting.
+ *
+ * Exceptions:
+ * 1. Edges at the coordinateStart's X coordinate do not count (sitting on an edge does not count)
  */
-export const castRay = (edgesInThePathOfTheRay: EdgesMap): number => {
-    return Array.from(edgesInThePathOfTheRay).reduce((acc, [ _, edgesAtX ]) => {
-        return acc += edgesAtX.length;
-    }, 0);
+export const castRay = (
+    edgesHorizontal: EdgesMap,
+    edgesVertical: EdgesMap,
+    coordinateStart: Coordinate
+): number => {
+    if (isOnBoundary(edgesHorizontal, edgesVertical, coordinateStart)) {
+        return 1;
+    }
+    else {
+        const [ px, py ] = coordinateStart;
+        const edges: Set<Edges> = new Set();
+
+        for (const [ xEdge, lineSegments ] of edgesVertical.entries()) {
+            // Skip edges not to the right of the ray
+            if (xEdge <= px) {
+                continue;
+            }
+
+            for (const [ bottom, top ] of lineSegments.values()) {
+                // Defensive coding
+                const yMax = Math.max(bottom, top);
+                const yMin = Math.min(bottom, top);
+
+                if (
+                    py >= yMin &&
+                    py < yMax // "half-open" interval prevents double-counting vertices
+                ) {
+                    edges.add([ yMin, yMax ]);
+                }
+            }
+        };
+
+        return edges.size;
+    }
+};
+
+/*
+ *doesSegmentCrossBoundary 
+ *
+ * Uses open intervals in the direction of a line segment so intersections exactly at
+ * the endpoints are not treated as crossing, which allows corners to lie on the boundary.
+ *
+ * Collinear edges (rectangle edge lying exactly on a polygon edge) as safe.
+ */
+export const doesSegmentCrossBoundary = (
+    edgesHorizontal: EdgesMap,
+    edgesVertical: EdgesMap,
+    vertexA: Coordinate,
+    vertexB: Coordinate
+): boolean => {
+    const [ x1, y1 ] = vertexA;
+    const [ x2, y2 ] = vertexB;
+
+    // Vertical line
+    if (x1 === x2) {
+        const yMax = Math.max(y1, y2);
+        const yMin = Math.min(y1, y2);
+
+        for (const [ yEdge, lineSegments ] of edgesHorizontal.entries()) {
+            if (yEdge <= yMin || yEdge >= yMax) {
+                continue;
+            }
+
+            for (const [ left, right ] of lineSegments.values()) {
+                const xMax = Math.max(left, right);
+                const xMin = Math.min(left, right);
+
+                if (xMin < x1 && xMax > x1) {
+                    coordinatesOutsideOfPolygon.add(getNonReferentialSetValue([ x1, yEdge ]));
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+    // horizontal line
+    else {
+        const xMax = Math.max(x1, x2);
+        const xMin = Math.min(x1, x2);
+
+        for (const [ xEdge, lineSegments ] of edgesVertical.entries()) {
+            if (xEdge <= xMin || xEdge >= xMax) {
+                continue;
+            }
+
+            for (const [ bottom, top ] of lineSegments.values()) {
+                const yMax = Math.max(bottom, top);
+                const yMin = Math.min(bottom, top);
+
+                if (yMin <= y1 && yMax >= y1) {
+                    coordinatesOutsideOfPolygon.add(getNonReferentialSetValue([ xEdge, y1 ]));
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 };
 
 /*
@@ -145,10 +174,10 @@ export const castRay = (edgesInThePathOfTheRay: EdgesMap): number => {
  *
  * Special edge case - what if the first and last vertices are apart of the same edge?
  */
-export const findEdges = (vertices: Vertices): { xEdges: EdgesMap, yEdges: EdgesMap } => {
+export const findEdges = (vertices: Vertices): { horizontalEdges: EdgesMap; verticalEdges: EdgesMap, } => {
     // Keys = X coordinate, Value = Top and bottom Y coordinate bounds
-    const xEdges: EdgesMap = new Map();
-    const yEdges: EdgesMap = new Map();
+    const verticalEdges: EdgesMap = new Map();
+    const horizontalEdges: EdgesMap = new Map();
 
     for (let verticesIndex = 0; verticesIndex < vertices.length; verticesIndex++) {
         // NOTE: wrap around to 0 to handle index 0 and -1 making up the same edge
@@ -158,53 +187,47 @@ export const findEdges = (vertices: Vertices): { xEdges: EdgesMap, yEdges: Edges
         const vertexCurrent = vertices[verticesIndex];
 
         // X values are not equal
-        if (vertexCurrent[0] !== vertexNext[0]) {
-            continue;
-        }
-        else {
+        if (vertexCurrent[0] === vertexNext[0]) {
             const yBounds = [
-                Math.max(vertexCurrent[1], vertexNext[1]),
                 Math.min(vertexCurrent[1], vertexNext[1]),
+                Math.max(vertexCurrent[1], vertexNext[1]),
             ];
-            const set = xEdges.get(vertexCurrent[0]);
+            const set = verticalEdges.get(vertexCurrent[0]);
 
             if (set) {
-                set.push(yBounds);
+                set.add(yBounds);
             }
             else {
-                xEdges.set(
+                verticalEdges.set(
                     vertexCurrent[0],
-                    [ yBounds ]
+                    new Set([ yBounds ])
                 );
             }
         }
 
         // Y values are not equal
-        if (vertexCurrent[1] !== vertexNext[1]) {
-            continue;
-        }
-        else {
+        if (vertexCurrent[1] === vertexNext[1]) {
             const xBounds = [
-                Math.max(vertexCurrent[0], vertexNext[0]),
                 Math.min(vertexCurrent[0], vertexNext[0]),
+                Math.max(vertexCurrent[0], vertexNext[0]),
             ];
-            const set = yEdges.get(vertexCurrent[1]);
+            const set = horizontalEdges.get(vertexCurrent[1]);
 
             if (set) {
-                set.push(xBounds);
+                set.add(xBounds);
             }
             else {
-                yEdges.set(
+                horizontalEdges.set(
                     vertexCurrent[1],
-                    [ xBounds ]
+                    new Set([ xBounds ])
                 );
             }
         }
     }
     
     return {
-        xEdges,
-        yEdges,
+        horizontalEdges,
+        verticalEdges,
     };
 };
 
@@ -234,52 +257,8 @@ export const findVertices = (coordinates: number[][]): Vertices => {
     return vertices;
 };
 
-/*
- * getEdgesInPathOfRay
- *
- * When checking if a coordinate is within the polygon, we "cast" a ray from the coordinate
- * towards X direction and count the number of edges the ray crosses. To cast the ray, we
- * need to know the edges in the path of the ray, so this returns the vertical edges which
- * will be in the way of the right moving cast ray.
- *
- * NOTE: Exclusive of edges the coordinate exists on
- */
-export const getEdgesInPathOfRay = (edges: EdgesMap, coordinate: number[]): EdgesMap => {
-    const edgesInPath: EdgesMap = new Map();
-
-    Array.from(edges).forEach(([ x, edgesAtX ]) => {
-        // We don't care about the value of x as long as x is to the right of our coordinate
-        // as we'll later look for Y bounds which lie in the pay of our "ray"
-        if (x > coordinate[0]) {
-            edgesAtX.forEach((yBounds: number[]) => {
-                const yCoordinate = coordinate[1];
-                const yBoundBottom = yBounds[1];
-                const yBoundTop = yBounds[0];
-
-                // Check to ensure the Y bounds are in the path of our ray
-                if (yBoundBottom <= yCoordinate && yCoordinate <= yBoundTop) {
-                    const bounds = [
-                        yBoundTop,
-                        yBoundBottom,
-                    ];
-
-                    const set = edgesInPath.get(x);
-
-                    if (set) {
-                        set.push(bounds);
-                    }
-                    else {
-                        edgesInPath.set(
-                            x,
-                            [ bounds ]
-                        );
-                    }
-                }
-            });
-        }
-    });
-
-    return edgesInPath;
+export const getNonReferentialSetValue = (coordinate: Coordinate): string => {
+    return `${coordinate[0]},${coordinate[1]}`;
 };
 
 const isCoordinateAVertex = (
@@ -292,71 +271,44 @@ const isCoordinateAVertex = (
         && previousCoordinate[1] !== nextCoordinate[1];
 };
 
-export const isCoordinateOnAVerticalEdge = (edges: EdgesMap, coordinate: number[]) => {
-    const edgesWithSameXCoordinate = edges.get(coordinate[0]);
+export const isOnBoundary = (
+    edgesHorizontal: EdgesMap,
+    edgesVertical: EdgesMap,
+    [ x, y ]: Coordinate
+) => {
+    // If a coordinate exist on a vertical edge, we can skip to the end
+    const horizontalSegments = edgesHorizontal.get(y);
 
-    if (edgesWithSameXCoordinate) {
-        return edgesWithSameXCoordinate.some((edge) => {
-            const isCoordinateYGteEdgeBottomBound = edge[1] <= coordinate[1];
-            const isCoordinateYLteEdgeTopBound = edge[0] >= coordinate[1];
+    if (horizontalSegments) {
+        for (const [ left, right ] of horizontalSegments.values()) {
+            // Defensive programming
+            const xMax = Math.max(left, right);
+            const xMin = Math.min(left, right);
 
-            if (isCoordinateYGteEdgeBottomBound && isCoordinateYLteEdgeTopBound) {
+            // Do not return false
+            if (x >= xMin && x <= xMax) {
                 return true;
             }
-        });
-    }
-    else {
-        return false;
-    }
-};
-
-/*
- * isCoordinateWithinPolygon
- *
- * First, checks to see if the coordinate is on an edge, and if so, returns immediately; however,
- * if it does not, it utilizes "ray casting" or the even-odd rule to determine if a coordinate
- * is within a polygon, which is an unpredictable, arbitrary shape.
- *
- * Must account for the coordinate being:
- * 1. (a) on the edge
- * 2. (b) in the middle
- */
-export const isCoordinateWithinPolygon = (edges: EdgesMap, coordinate: number[]): boolean => {
-    if (isCoordinateOnAVerticalEdge(edges, coordinate)) {
-        return true;
-    }
-    else {
-        // if (trueRayCastedCoordinates.has(getSafeMapKey(coordinate))) {
-        //     return true;
-        // }
-
-        const edgesInThePathOfTheRay = getEdgesInPathOfRay(edges, coordinate);
-        const edgesCrossed = castRay(edgesInThePathOfTheRay);
-
-        // If even, the coordinate is not within the polygon
-        if (edgesCrossed % 2 === 0) {
-            return false;
         }
-        else {
-            // trueRayCastedCoordinates.add(getSafeMapKey(coordinate));
+    };
 
-            return true;
+    // If a coordinate exist on a vertical edge, we can skip to the end
+    const verticalSegments = edgesVertical.get(x);
+
+    if (verticalSegments) {
+        for (const [ bottom, top ] of verticalSegments.values()) {
+            // Defensive programming
+            const yMax = Math.max(bottom, top);
+            const yMin = Math.min(bottom, top);
+
+            // Do not return false
+            if (y >= yMin && y <= yMax) {
+                return true;
+            }
         }
-    }
-};
+    };
 
-/*
- * areRectangleCornersWithinPolygon
- *
- * When comparing two red tile coordinates, while also treating them as opposing corners, it would be
- * more efficient to first check the other two corners of the rectangle to ensure those are within the
- * polygon, because jumping straight into checking each coordinate one at a time is pointless if we
- * can guarantee they won't all be with only two coordinates...
- */
-export const areRectangleCornersWithinPolygon = (edges: EdgesMap, coordinates: number[][]): boolean => {
-    return coordinates.every((coordinate) => {
-        return isCoordinateWithinPolygon(edges, coordinate); 
-    });
+    return false;
 };
 
 export const isRectangleAStraightLine = (coordinates: number[][]): boolean => {
@@ -366,140 +318,77 @@ export const isRectangleAStraightLine = (coordinates: number[][]): boolean => {
     return y1 === y2 || x1 === x2; 
 };
 
-export const getPolgonBoundsAtX = (edges: EdgesMap, x: number): { maxY: number, minY: number } | null => {
-    const edgesAtX = edges.get(x);
-
-    if (edgesAtX) {
-        let maxY = Infinity;
-        let minY = -Infinity;
-
-        edgesAtX.forEach((edge) => {
-            maxY = Math.max(maxY, edge[0]);
-            minY = Math.min(minY, edge[1]);
-        });
-
-        return {
-            maxY,
-            minY,
-        };
-    }
-    else {
-        return null;
-    }
-};
-
-export const getPolgonBoundsAtY = (edges: EdgesMap, y: number): { maxX: number, minX: number } | null => {
-    const edgesAtY = edges.get(y);
-
-    if (edgesAtY) {
-        let maxX = Infinity;
-        let minX = -Infinity;
-
-        edgesAtY.forEach((edge) => {
-            maxX = Math.max(maxX, edge[0]);
-            minX = Math.min(minX, edge[1]);
-        });
-
-        return {
-            maxX,
-            minX,
-        };
-    }
-    else {
-        return null;
-    }
-};
-
-const execution = () => {
+export const execution = () => {
     console.time("Execution time");
 
-    const {
-        workerIndex,
-        workerNumber,
-    } = workerData;
     const redTileCoordinates = puzzleData.redTileCoordinates;
     const vertices = findVertices(redTileCoordinates);
-    const { xEdges, yEdges } = findEdges(vertices);
+    const {
+        horizontalEdges,
+        verticalEdges,
+    } = findEdges(vertices);
     let maxArea = 0;
 
-
-    for (let outerIndex = workerIndex; outerIndex < redTileCoordinates.length; outerIndex += workerNumber) {
-        // console.log(`Progress: ${outerIndex}/${redTileCoordinates.length - 1}`);
-
+    for (let outerIndex = 0; outerIndex < redTileCoordinates.length; outerIndex++) {
+    // for (let outerIndex = 0; outerIndex < 1; outerIndex++) {
+        // for (let innerIndex = outerIndex + 1; innerIndex < 5; innerIndex++) {
         for (let innerIndex = outerIndex + 1; innerIndex < redTileCoordinates.length; innerIndex++) {
-            if (innerIndex % 10 === 0) {
-                // console.log(`Progress: ${outerIndex}/${redTileCoordinates.length - 1} - ${innerIndex}/${redTileCoordinates.length - 1}`);
-            }
+            // Corners may represent the vertices of a rectangle clockwise or counter-clockwise
+            const cornerA = redTileCoordinates[outerIndex];
+            const cornerC = redTileCoordinates[innerIndex];
+            const cornerB = [ cornerA[0], cornerC[1] ];
+            const cornerD = [ cornerC[0], cornerA[1] ];
 
-            // For each pair, get the rectangle bounds
-            const bottomRightBound = [
-                Math.max(redTileCoordinates[innerIndex][0], redTileCoordinates[outerIndex][0]),
-                Math.min(redTileCoordinates[innerIndex][1], redTileCoordinates[outerIndex][1]),
-            ];
-            const topLeftBound = [
-                Math.min(redTileCoordinates[innerIndex][0], redTileCoordinates[outerIndex][0]),
-                Math.max(redTileCoordinates[innerIndex][1], redTileCoordinates[outerIndex][1]),
-            ];
-            const bottomLeftBound = [
-                topLeftBound[0],
-                bottomRightBound[1],
-            ];
-            const topRightBound = [
-                bottomRightBound[0],
-                topLeftBound[1],
-            ];
-            const bottomY = bottomLeftBound[1];
-            const leftX = bottomLeftBound[0];
-            const rightX = topRightBound[0];
-            const topY = topLeftBound[1];
-
-            // No point processing internal coordinates if the four corners aren't all within the polygon
-            // and we know the bottomRightBound and topLeftBound are because they come from the redTileCoordinates
-            if (!areRectangleCornersWithinPolygon(xEdges, [ bottomLeftBound, bottomRightBound, topLeftBound, topRightBound ])) {
+            if (
+                // Skip flat rectangles
+                cornerA[0] === cornerC[0] ||
+                cornerA[1] === cornerC[1] 
+            ) {
                 continue;
             }
 
-            // NOTE: comment out to process all polygons regardless of whether it is effectively a straight line
-            if (isRectangleAStraightLine([ bottomRightBound, topLeftBound ])) {
+            // Check if calculated corner coordinates are within the polygon
+            const edgeCrossesCornerB = castRay(horizontalEdges, verticalEdges, cornerB);
+
+            if (edgeCrossesCornerB % 2 === 0) {
+                coordinatesOutsideOfPolygon.add(getNonReferentialSetValue(cornerB));
                 continue;
             }
 
-            const topEdgeBounds = getPolgonBoundsAtY(yEdges, topY);
+            // Check if calculated corner coordinates are within the polygon
+            const edgeCrossesCornerD = castRay(horizontalEdges, verticalEdges, cornerD);
 
-            if (!topEdgeBounds || (leftX < topEdgeBounds.minX || rightX > topEdgeBounds.maxX)) {
+            if (edgeCrossesCornerD % 2 === 0) {
+                coordinatesOutsideOfPolygon.add(getNonReferentialSetValue(cornerD));
                 continue;
             }
 
-            const bottomEdgeBounds = getPolgonBoundsAtY(yEdges, bottomY);
-
-            if (!bottomEdgeBounds || (leftX < bottomEdgeBounds.minX || rightX > bottomEdgeBounds.maxX)) {
+            // Check if any edge intersections with an edge of the polygon
+            if (
+                doesSegmentCrossBoundary(horizontalEdges, verticalEdges, cornerA, cornerB) ||
+                doesSegmentCrossBoundary(horizontalEdges, verticalEdges, cornerB, cornerC) ||
+                doesSegmentCrossBoundary(horizontalEdges, verticalEdges, cornerC, cornerD) ||
+                doesSegmentCrossBoundary(horizontalEdges, verticalEdges, cornerD, cornerA)
+            ) {
                 continue;
             }
 
-            const leftEdgeBounds = getPolgonBoundsAtX(xEdges, leftX);
-
-            if (!leftEdgeBounds || (bottomY < leftEdgeBounds.minY || topY > leftEdgeBounds.maxY)) {
-                continue;
-            }
-
-            const rightEdgeBounds = getPolgonBoundsAtX(xEdges, rightX);
-
-            if (!rightEdgeBounds || (bottomY < rightEdgeBounds.minY || topY > rightEdgeBounds.maxY)) {
-                continue;
-            }
-
-            maxArea = Math.max(maxArea, calculateArea(bottomLeftBound, topRightBound)); 
+            maxArea = Math.max(maxArea, calculateArea(cornerA, cornerC));
         }
     }
 
     console.timeEnd("Execution time");
+    console.log(maxArea);
     // 2:37, 2:11, 1:43, 1:37:00
     // 8-core with pre-divided chunk sizes - 54m
     // 8-core with each sequentially red tile coordinate assigned to a different worker - 30m
+    // 8-core with raycasting only from each rectangles four vertices
+    // 1-core with raycasting only at each corner and along the edges: 1.025s
+
     
-    parentPort?.postMessage({ maxArea });
+    // return { coordinatesOutsideOfPolygon };
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process && import.meta.url === `file://${process.argv[1]}`) {
     execution();
 }
