@@ -1,5 +1,3 @@
-import { machine } from "os";
-
 import puzzleData from "./10.json" with { type: "json" };
 
 interface MachineData {
@@ -8,9 +6,51 @@ interface MachineData {
     lightIndicators: number[];
 }
 
+type ButtonDiagram = number;
+
+type FreeVariables = Map<number, number>;
+
+type GaussianMatrix = Map<LightIndicator, ButtonDiagram[]>;
+
+type LightIndicator = number;
+
+type PivotVariables = Map<number, number>;
+
 const machines = puzzleData.machines;
 
-const getGaussianMatrix = (machineData: MachineData) => {
+const getFreeVariables = (matrix: GaussianMatrix): FreeVariables => {
+};
+
+/*
+ * getGaussianEchelonForm
+ *
+ * "Echelon form" is a stair pattern:
+ * 1 0
+ * _ 
+ * 0|1 0
+ * 0 _
+ * 0 0|1 0
+ * 0 0 _
+ *
+ * 1. Find a row with a leading 1 in the leftmost column
+ * 2. For each row of the gaussian matrix, iterate over each column
+ *   1. For each column, swap rows with the first row which has a leading 1 in that column
+ *   2. If there is not a leading 1 in the column, move on to the next column
+ *   3. Once a leading 1 is found (by coincidental positioning or swapping), eliminate any row
+ *      with XOR addition (^) so there only 0s under the leading 1
+ *   4. After elimination, move on to the next row
+ *
+ * NOTE:
+ * The target row gets swapped and eliminated like any other column.
+ */
+const getGaussianEchelonForm = (matrix: GaussianMatrix): GaussianMatrix => {
+    const localMatrix = new Map(matrix.entries());
+
+    for (const row of localMatrix.values()) {
+    }
+};
+
+const getGaussianMatrix = (machineData: MachineData): GaussianMatrix => {
     const matrix = new Map<number, number[]>(
         // Initializes the matrix with the exact number of light indicators set to []
         Array.from({ length: machineData.lightIndicators.length }, (_, index) => {
@@ -85,6 +125,16 @@ const getMachineData = (rawMachineData: string): MachineData => {
         joltages,
         lightIndicators,
     };
+};
+
+const getPivotVariables = (matrix: GaussianMatrix, freeVariables: FreeVariables) => {
+};
+
+const readAllPossibleSolutions = (
+    matrix: GaussianMatrix,
+    freeVariables: FreeVariables,
+    pivotVariables: PivotVariables
+): number[][] => {
 };
 
 for (const machine of machines.slice(0, 1)) {
