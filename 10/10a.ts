@@ -95,30 +95,19 @@ const getGaussianEchelonForm = (matrix: GaussianMatrix): GaussianMatrix => {
         columnIndex < localMatrix.get(0)!.length;
         columnIndex++
     ) {
-        // TODO: remove - this is just for iterative manual testing
-        // if (pivotRowIndex > 0) {
-        //     break; 
-        // }
-
-        // TODO: find first row with a 1 in the current columnIndex
         for (
             let rowIndex = pivotRowIndex;
             rowIndex < localMatrix.size;
             rowIndex++
         ) {
             if (localMatrix.get(rowIndex)![columnIndex] === 1) {
-                console.log(`Row ${rowIndex} at column ${columnIndex} has a leading 1`);
-
                 const pivotRowValue = localMatrix.get(pivotRowIndex)!;
                 const rowWithLeadingOneValue = localMatrix.get(rowIndex)!;
 
                 localMatrix.set(pivotRowIndex, rowWithLeadingOneValue);
                 localMatrix.set(rowIndex, pivotRowValue);
 
-                console.log(`Swapped row ${pivotRowIndex} with ${rowIndex}`);
-
                 if (rowIndex !== matrix.size) {
-                    console.log(chalk.black.bgRed.bold("Beginning... elimination!"));
                     localMatrix = eliminate(localMatrix, columnIndex, pivotRowIndex);
                 }
 
