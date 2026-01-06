@@ -1,3 +1,5 @@
+import chalk from "chalk";
+
 import puzzleData from "./10.json" with { type: "json" };
 
 interface MachineData {
@@ -18,6 +20,45 @@ type PivotVariables = Map<number, number>;
 
 const machines = puzzleData.machines;
 
+const eliminate = (
+    matrix: GaussianMatrix,
+    currentColumnIndex: number,
+    pivotRowIndex: number
+): GaussianMatrix => {
+    const localMatrix = new Map(matrix.entries());
+
+    // Perform elimination on all columns after our pivot row
+    for (
+        let rowBelowIndex = pivotRowIndex + 1;
+        rowBelowIndex < localMatrix.size;
+        rowBelowIndex++
+    ) {
+        // Skip rows without a 1 under our new leading 1 row/column
+        if (localMatrix.get(rowBelowIndex)![currentColumnIndex] !== 1) {
+            continue;
+        }
+
+        const newValues = [];
+
+        // Perform XOR addition on each column
+        for (
+            let columnIndex = 0;
+            columnIndex < localMatrix.get(rowBelowIndex)!.length;
+            columnIndex++
+        ) {
+            const belowRowValue = localMatrix.get(rowBelowIndex)![columnIndex];
+            const pivotRowValue = localMatrix.get(pivotRowIndex)![columnIndex];
+
+            newValues.push(belowRowValue^pivotRowValue);
+        }
+
+        localMatrix.set(rowBelowIndex, newValues);
+    }
+
+    return localMatrix;
+};
+
+// TODO:
 const getFreeVariables = (matrix: GaussianMatrix): FreeVariables => {
 };
 
@@ -44,10 +85,53 @@ const getFreeVariables = (matrix: GaussianMatrix): FreeVariables => {
  * The target row gets swapped and eliminated like any other column.
  */
 const getGaussianEchelonForm = (matrix: GaussianMatrix): GaussianMatrix => {
-    const localMatrix = new Map(matrix.entries());
+    console.log(matrix);
 
-    for (const row of localMatrix.values()) {
+    let localMatrix = new Map(matrix.entries());
+    let pivotRowIndex = 0;
+
+    for (
+        let columnIndex = 0;
+        columnIndex < localMatrix.get(0)!.length;
+        columnIndex++
+    ) {
+        // TODO: remove - this is just for iterative manual testing
+        // if (pivotRowIndex > 0) {
+        //     break; 
+        // }
+
+        // TODO: find first row with a 1 in the current columnIndex
+        for (
+            let rowIndex = pivotRowIndex;
+            rowIndex < localMatrix.size;
+            rowIndex++
+        ) {
+            if (localMatrix.get(rowIndex)![columnIndex] === 1) {
+                console.log(`Row ${rowIndex} at column ${columnIndex} has a leading 1`);
+
+                const pivotRowValue = localMatrix.get(pivotRowIndex)!;
+                const rowWithLeadingOneValue = localMatrix.get(rowIndex)!;
+
+                localMatrix.set(pivotRowIndex, rowWithLeadingOneValue);
+                localMatrix.set(rowIndex, pivotRowValue);
+
+                console.log(`Swapped row ${pivotRowIndex} with ${rowIndex}`);
+
+                if (rowIndex !== matrix.size) {
+                    console.log(chalk.black.bgRed.bold("Beginning... elimination!"));
+                    localMatrix = eliminate(localMatrix, columnIndex, pivotRowIndex);
+                }
+
+                pivotRowIndex++;
+                break;
+            }
+            else {
+                continue;
+            }
+        }
     }
+
+    return localMatrix;
 };
 
 const getGaussianMatrix = (machineData: MachineData): GaussianMatrix => {
@@ -140,7 +224,11 @@ const readAllPossibleSolutions = (
 for (const machine of machines.slice(0, 1)) {
     const machineData = getMachineData(machine);
     const matrix = getGaussianMatrix(machineData);
+    const matrixEchelonForm = getGaussianEchelonForm(matrix);
+    const freeVariables = getFreeVariables(matrixEchelonForm);
 
-    console.log("MachineData", machineData);
-    console.log("Matrix", matrix);
+    // console.log("MachineData", machineData);
+    // console.log("Matrix", matrix);
+    // console.log("Matrix Echelon Form", matrixEchelonForm);
+    console.log("Matrix free variabes", freeVariables);
 }
