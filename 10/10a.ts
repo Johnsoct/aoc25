@@ -10,13 +10,14 @@ interface MachineData {
 
 type ButtonDiagram = number;
 
-type FreeVariables = ButtonDiagram[];
-
 type GaussianMatrix = Map<LightIndicator, ButtonDiagram[]>;
 
 type LightIndicator = number;
 
-type PivotVariables = Map<number, number>;
+type Variables = {
+    freeVariables: ButtonDiagram[],
+    pivotVariables: ButtonDiagram[]
+};
 
 const machines = puzzleData.machines;
 
@@ -58,8 +59,7 @@ const eliminate = (
     return localMatrix;
 };
 
-// TODO:
-const getFreeVariables = (matrix: GaussianMatrix): FreeVariables => {
+const getVariables = (matrix: GaussianMatrix): Variables => {
     const freeVariables: number[] = [];
     const pivotVariables: number[] = [];
     let lastColumnWithLeadingOne = 0;
@@ -83,7 +83,10 @@ const getFreeVariables = (matrix: GaussianMatrix): FreeVariables => {
         }
     }
 
-    return freeVariables;
+    return {
+        freeVariables,
+        pivotVariables,
+    };
 };
 
 /*
@@ -224,24 +227,27 @@ const getMachineData = (rawMachineData: string): MachineData => {
     };
 };
 
-const getPivotVariables = (matrix: GaussianMatrix, freeVariables: FreeVariables) => {
-};
-
+// TODO:
 const readAllPossibleSolutions = (
-    matrix: GaussianMatrix,
-    freeVariables: FreeVariables,
-    pivotVariables: PivotVariables
-): number[][] => {
+    matrixEchelonForm: GaussianMatrix,
+    freeVariables: ButtonDiagram[],
+    pivotVariables: ButtonDiagram[]
+): ButtonDiagram[][] => {
 };
 
 for (const machine of machines.slice(0, 1)) {
     const machineData = getMachineData(machine);
     const matrix = getGaussianMatrix(machineData);
     const matrixEchelonForm = getGaussianEchelonForm(matrix);
-    const freeVariables = getFreeVariables(matrixEchelonForm);
+    const {
+        freeVariables,
+        pivotVariables,
+    } = getVariables(matrixEchelonForm);
+    const solutions = readAllPossibleSolutions(matrixEchelonForm, freeVariables, pivotVariables);
 
     // console.log("MachineData", machineData);
     // console.log("Matrix", matrix);
     console.log("Matrix Echelon Form", matrixEchelonForm);
-    console.log("Matrix Free Variables", freeVariables);
+    console.log("Matrix Free Variables", pivotVariables, freeVariables);
+    consooe.log("Solutions", solutions);
 }
