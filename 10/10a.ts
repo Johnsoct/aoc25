@@ -10,7 +10,7 @@ interface MachineData {
 
 type ButtonDiagram = number;
 
-type FreeVariables = Map<number, number>;
+type FreeVariables = ButtonDiagram[];
 
 type GaussianMatrix = Map<LightIndicator, ButtonDiagram[]>;
 
@@ -60,6 +60,30 @@ const eliminate = (
 
 // TODO:
 const getFreeVariables = (matrix: GaussianMatrix): FreeVariables => {
+    const freeVariables: number[] = [];
+    const pivotVariables: number[] = [];
+    let lastColumnWithLeadingOne = 0;
+
+    for (const row of matrix.values()) {
+        for (let columnIndex = lastColumnWithLeadingOne; columnIndex < row.length; columnIndex++) {
+            if (row[columnIndex] === 1) {
+                pivotVariables.push(columnIndex);
+                lastColumnWithLeadingOne = columnIndex;
+                break;
+            }
+        }
+    }
+
+    for (let columnIndex = 0; columnIndex < matrix.get(0)!.length; columnIndex++) {
+        if (pivotVariables.includes(columnIndex)) {
+            continue;
+        }
+        else {
+            freeVariables.push(columnIndex);
+        }
+    }
+
+    return freeVariables;
 };
 
 /*
@@ -218,6 +242,6 @@ for (const machine of machines.slice(0, 1)) {
 
     // console.log("MachineData", machineData);
     // console.log("Matrix", matrix);
-    // console.log("Matrix Echelon Form", matrixEchelonForm);
-    console.log("Matrix free variabes", freeVariables);
+    console.log("Matrix Echelon Form", matrixEchelonForm);
+    console.log("Matrix Free Variables", freeVariables);
 }
