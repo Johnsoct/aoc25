@@ -228,11 +228,33 @@ const getMachineData = (rawMachineData: string): MachineData => {
 };
 
 // TODO:
+/*
+ * readAllPossibleSolutions
+ *
+ * To read all possible solutions of a gaussian matrix in echelon form
+ * means to iteratively change one of the free variables values from 0
+ * to 1, equivalent to `freeVariables.length^2`
+ *
+ * Example:
+ *
+ * const freeVariables = [ A, B ];
+ * const variations = [
+ *     [ 0, 0 ], [ 1, 0 ], [ 1, 1 ], [ 0, 1 ]
+ * ];
+ *
+ * NOTE: `freeVariables` could be of any length
+ *
+ * ... solve for each variation.
+ */
 const readAllPossibleSolutions = (
     matrixEchelonForm: GaussianMatrix,
     freeVariables: ButtonDiagram[],
     pivotVariables: ButtonDiagram[]
 ): ButtonDiagram[][] => {
+    const solutions: ButtonDiagram[][] = [];
+
+
+    return solutions;
 };
 
 for (const machine of machines.slice(0, 1)) {
