@@ -74,7 +74,8 @@ const getVariables = (matrix: GaussianMatrix): Variables => {
         }
     }
 
-    for (let columnIndex = 0; columnIndex < matrix.get(0)!.length; columnIndex++) {
+    // Subtract 1 for the target column
+    for (let columnIndex = 0; columnIndex < matrix.get(0)!.length  - 1; columnIndex++) {
         if (pivotVariables.includes(columnIndex)) {
             continue;
         }
@@ -112,8 +113,6 @@ const getVariables = (matrix: GaussianMatrix): Variables => {
  * The target row gets swapped and eliminated like any other column.
  */
 const getGaussianEchelonForm = (matrix: GaussianMatrix): GaussianMatrix => {
-    console.log(matrix);
-
     let localMatrix = new Map(matrix.entries());
     let pivotRowIndex = 0;
 
@@ -251,25 +250,84 @@ const readAllPossibleSolutions = (
     freeVariables: ButtonDiagram[],
     pivotVariables: ButtonDiagram[]
 ): ButtonDiagram[][] => {
+    const numCombinations = 1 << freeVariables.length;
     const solutions: ButtonDiagram[][] = [];
 
+    // TODO: iterate freeVariables.length^2; currently testing with all FVs === 0
+    freeVariables.forEach((columnIndex) => {
+        // For each variable, it's column value can be 0 and 1
+        // For each variable, the other variables can either be 0 or 1
+        const buttonPresses = new Map<number, number>();
+    
+        freeVariables.forEach((columnIndex) => {
+            return buttonPresses.set(columnIndex, 0); 
+        });
+
+        // Solve from the bottom up
+        for (let rowIndex = matrixEchelonForm.size - 1; rowIndex >= 0; rowIndex--) {
+            const row = matrixEchelonForm.get(rowIndex)!;
+            const target = row[row.length - 1];
+            const pivotColumn = row.indexOf(1);
+        
+            // Skips all rows with all 0s
+            if (pivotColumn === -1) {
+                continue;
+            }
+        
+            // console.log("pivotColumn:", pivotColumn);
+            buttonPresses.set(pivotColumn, target ^ row.slice(0, -1).reduce((sum, cur, colIndex) => {
+                if (colIndex < pivotColumn) {
+                    return sum;
+                }
+
+                if (cur === 0) {
+                    return sum;
+                }
+
+
+                if (buttonPresses.has(colIndex)) {
+                // console.log(sum, "XOR", columnValue, "=", sum ^ columnValue);
+
+                    return sum ^ buttonPresses.get(colIndex)!;
+                }
+                else {
+                // console.log(sum, "XOR", row[colIndex], "=", sum ^ row[colIndex]);
+
+                    return sum ^ row[colIndex]!;
+                }
+            }, 0));
+        // console.log("pivotColumn in columnValues:", columnValues.get(pivotColumn));
+        }
+
+        console.log("column values:", buttonPresses);
+        solutions.push(Array.from(buttonPresses.values()).filter(Boolean));
+    });
 
     return solutions;
 };
 
 for (const machine of machines.slice(0, 1)) {
     const machineData = getMachineData(machine);
+    
+    // console.log("MachineData", machineData);
+    
     const matrix = getGaussianMatrix(machineData);
+
+    // console.log("Matrix", matrix);
+
     const matrixEchelonForm = getGaussianEchelonForm(matrix);
+
+    console.log("Matrix Echelon Form (last column is the target row)", matrixEchelonForm);
+
     const {
         freeVariables,
         pivotVariables,
     } = getVariables(matrixEchelonForm);
+
+    console.log("Pivot variables:", pivotVariables);
+    console.log("Free variables", freeVariables);
+
     const solutions = readAllPossibleSolutions(matrixEchelonForm, freeVariables, pivotVariables);
 
-    // console.log("MachineData", machineData);
-    // console.log("Matrix", matrix);
-    console.log("Matrix Echelon Form", matrixEchelonForm);
-    console.log("Matrix Free Variables", pivotVariables, freeVariables);
-    consooe.log("Solutions", solutions);
+    console.log("Solutions", solutions);
 }
